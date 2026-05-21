@@ -27,40 +27,47 @@
         <h1 class="page-title">상세 설치 가이드</h1>
         <p class="page-subtitle">Stock Quant Trader를 당신의 컴퓨터에 이식하는 가장 확실한 방법입니다.</p>
 
-        <div class="guide-content">
-            <div class="guide-section">
-                <h2>Step 1: 시스템 요구사항 확인</h2>
-                <ul>
-                    <li><strong>운영체제</strong>: Ubuntu/Linux, Windows, macOS 모두 지원 (REST API 방식)</li>
-                    <li><strong>하드웨어</strong>: RAM 8GB 이상 권장 (안정적인 데이터 처리를 위함)</li>
-                    <li><strong>보안</strong>: 관리자 권한 실행 권장</li>
+        <div class="install-steps" style="margin-top: 3rem;">
+            <div class="step fade-in">
+                <span class="step-num">01</span>
+                <h4 style="font-size: 1.4rem; margin-bottom: 1rem; color: var(--primary-color);">시스템 요구사항 확인</h4>
+                <ul style="list-style: none; padding-left: 0;">
+                    <li style="margin-bottom: 0.8rem;"><span style="color: var(--primary-color); font-weight: bold; margin-right: 0.5rem;">✓</span> <strong>운영체제</strong>: Ubuntu, Windows, macOS</li>
+                    <li style="margin-bottom: 0.8rem;"><span style="color: var(--primary-color); font-weight: bold; margin-right: 0.5rem;">✓</span> <strong>하드웨어</strong>: RAM 8GB 이상 권장</li>
+                    <li style="margin-bottom: 0.8rem;"><span style="color: var(--primary-color); font-weight: bold; margin-right: 0.5rem;">✓</span> <strong>보안</strong>: 관리자 권한 실행 권장</li>
                 </ul>
             </div>
 
-            <div class="guide-section">
-                <h2>Step 2: Python 설치</h2>
-                <p>한국투자증권 KIS API는 64비트 및 모든 환경을 완벽 지원합니다.</p>
-                <ol>
-                    <li><a href="https://www.python.org/downloads/">Python 공식 사이트</a> 방문</li>
-                    <li>해당 OS에 맞는 Python 다운로드 및 실행</li>
-                    <li>설치 시 <strong>Add Python to PATH</strong> 옵션 반드시 체크</li>
+            <div class="step fade-in delay-1">
+                <span class="step-num">02</span>
+                <h4 style="font-size: 1.4rem; margin-bottom: 1rem; color: var(--primary-color);">Python 설치</h4>
+                <p style="margin-bottom: 1rem; color: var(--text-muted); font-size: 0.95rem;">한국투자증권 KIS API는 64비트 및 모든 환경을 완벽 지원합니다.</p>
+                <ol style="padding-left: 1.2rem; color: var(--text-muted); font-size: 0.95rem;">
+                    <li style="margin-bottom: 0.5rem;"><a href="https://www.python.org/downloads/" target="_blank" style="color: white; text-decoration: underline;">Python 공식 사이트</a> 방문</li>
+                    <li style="margin-bottom: 0.5rem;">OS에 맞는 Python 다운로드 및 실행</li>
+                    <li style="margin-bottom: 0.5rem;">설치 시 <strong style="color: white;">Add Python to PATH</strong> 필수 체크</li>
                 </ol>
             </div>
 
-            <div class="guide-section">
-                <h2>Step 3: 한국투자증권 OpenAPI 서비스 신청</h2>
-                <ol>
-                    <li>한국투자증권 KIS Developers 로그인</li>
-                    <li>App Key 및 App Secret 발급</li>
-                    <li>모의투자 계좌 개설 (권장)</li>
+            <div class="step fade-in delay-2">
+                <span class="step-num">03</span>
+                <h4 style="font-size: 1.4rem; margin-bottom: 1rem; color: var(--primary-color);">OpenAPI 서비스 신청</h4>
+                <ol style="padding-left: 1.2rem; color: var(--text-muted); font-size: 0.95rem; margin-top: 1rem;">
+                    <li style="margin-bottom: 0.5rem;">한국투자증권 KIS Developers 로그인</li>
+                    <li style="margin-bottom: 0.5rem;">App Key 및 App Secret 발급</li>
+                    <li style="margin-bottom: 0.5rem;">모의투자 계좌 개설 (권장)</li>
                 </ol>
             </div>
+        </div>
 
-            <div class="guide-section">
-                <h2>Step 4: 프로젝트 환경 구축</h2>
-                <pre><code>git clone https://github.com/leemgs/stock-quant-trader.git
+        <div class="step fade-in" style="margin-top: 5rem; max-width: 800px;">
+            <span class="step-num" style="top: -2.5rem;">04</span>
+            <h4 style="font-size: 1.6rem; margin-bottom: 1rem; color: var(--text-color);">프로젝트 환경 구축</h4>
+            <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: 1.05rem;">터미널(또는 명령 프롬프트)을 열고 아래 명령어를 순서대로 실행하세요.</p>
+            <div class="code-box" style="overflow-x: auto; font-size: 1.1rem;">
+                <pre style="margin: 0; font-family: 'Courier New', monospace; color: #a5d6ff; line-height: 1.6;">git clone https://github.com/leemgs/stock-quant-trader.git
 cd stock-quant-trader
-pip install -r requirements.txt</code></pre>
+pip install -r requirements.txt</pre>
             </div>
         </div>
     </main>
