@@ -71,18 +71,19 @@ st.sidebar.markdown(
 <p style="margin: 0 0 5px 0; font-size: 13px;"><strong>KIS Account:</strong> <code>{kis_account_no}-{kis_account_suffix}</code></p>
 <p style="margin: 0 0 5px 0; font-size: 13px;"><strong>투자 운영 금액:</strong> <code>{investment_budget:,}원</code></p>
 <p style="margin: 0 0 15px 0; font-size: 13px;"><strong>투자 운영 결과:</strong> <code style="color: {'#e53935' if current_total < investment_budget else '#1e88e5' if current_total > investment_budget else '#333'}; font-weight: bold;">{current_total:,}원</code></p>
-
-<h4 style="margin: 0 0 5px 0; font-size: 15px;">⏰ 매매 운영 시간</h4>
-<ul style="margin: 0 0 15px 0; padding-left: 20px; font-size: 12px; color: #444; line-height: 1.4;">
-<li><strong>운영 요일</strong>: 월 ~ 금 (공휴일 제외)</li>
-<li><strong>개장 준비</strong>: 08:50 ~ 09:00</li>
-<li><strong>자동 매매</strong>: 09:00 ~ 15:15</li>
-<li><strong>강제 청산</strong>: 15:15 (미수 방지)</li>
-</ul>
 </div>
 """,
     unsafe_allow_html=True
 )
+
+with st.sidebar.expander("⏰ 매매 운영 시간 확인"):
+    st.markdown("""
+    - **운영 요일**: 월 ~ 금 (공휴일 제외)
+    - **개장 준비**: 08:50 ~ 09:00
+    - **자동 매매**: 09:00 ~ 15:15
+    - **강제 청산**: 15:15 (미수 방지)
+    """)
+
 refresh_rate = st.sidebar.slider("새로고침 간격(초)", 5, 60, 10)
 
 st.sidebar.markdown("---")
