@@ -50,7 +50,7 @@ st.sidebar.write(f"**KIS Account:** `{kis_account_no}-{kis_account_suffix}`")
 refresh_rate = st.sidebar.slider("새로고침 간격(초)", 5, 60, 10)
 
 # 메인 타이틀
-st.title("🚀 Real-time Dashboard for Stock Quant Trader")
+st.markdown("<h2 style='font-size: 28px; font-weight: bold; margin-bottom: 20px;'>🚀 Real-time Dashboard for Stock Quant Trader</h2>", unsafe_allow_html=True)
 
 # 데이터 로드
 df = get_data()
