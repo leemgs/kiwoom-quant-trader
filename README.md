@@ -63,10 +63,10 @@ graph TD
 ## 2. 실행 화면 (Screenshots)
 
 ### 📈 실시간 매매 대시보드 (Web UI)
-![Dashboard Preview](images/dashboard_preview.jpg)
+![Dashboard Preview](img/dashboard_preview.jpg)
 
 ### 💻 퀀트 엔진 자동매매 로그 (Terminal)
-![Terminal Logs](images/terminal_logs.jpg)
+![Terminal Logs](img/terminal_logs.jpg)
 
 ---
 
