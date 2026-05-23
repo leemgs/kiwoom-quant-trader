@@ -1,5 +1,5 @@
 import os
-import kis_developer as kis
+import mojito as kis
 import logging
 
 class KISBroker:

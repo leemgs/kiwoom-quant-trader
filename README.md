@@ -127,15 +127,20 @@ pip install -r requirements.txt
 2. 앱 키(App Key) 및 앱 시크릿(App Secret) 발급
 3. 모의투자 계좌 개설 (권장)
 
-### 4단계: 설정 파일(config.yaml) 수정
-`config.yaml` 파일을 열어 발급받은 키와 계좌 정보를 입력합니다.
-```yaml
-auth:
-  kis_app_key: "발급받은_앱키"
-  kis_app_secret: "발급받은_시크릿"
-  kis_account_no: "계좌번호8자리"
-  kis_virtual_trading: true # 모의투자시 true
+### 4단계: 설정 파일(.env) 세팅
+보안을 위해 API 키 및 계좌 정보 등 민감한 정보는 환경 변수 파일(`.env`)에서 관리합니다.
+
+1. `.env.sample` 파일을 복사하여 `.env` 파일을 생성합니다.
+```bash
+cp .env.sample .env
 ```
+2. `.env` 파일을 열어 발급받은 키와 계좌 정보를 입력합니다.
+```env
+KIS_APP_KEY=발급받은_앱키
+KIS_APP_SECRET=발급받은_시크릿
+KIS_ACCOUNT_NO=계좌번호8자리
+```
+*참고: 전략 설정, 대상 종목 및 투자 금액 등 구조적인 설정은 `config.yaml` 파일에서 수정합니다.*
 
 ### 5단계: 프로그램 실행
 

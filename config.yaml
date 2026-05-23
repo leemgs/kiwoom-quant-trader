@@ -1,14 +1,14 @@
 # KIS Quant Trader Configuration
 
 auth:
-  kis_app_key: "your_app_key"
-  kis_app_secret: "your_app_secret"
-  kis_account_no: "your_account_no" # 계좌번호 8자리
-  kis_account_suffix: "01"         # 계좌부호 2자리 (보통 01)
-  kis_virtual_trading: true        # 모의투자 여부 (true/false)
-  telegram_token: ""               # 텔레그램 봇 토큰
-  chat_id: ""                      # 텔레그램 챗 ID
-  gemini_api_key: ""               # Google Gemini API Key
+  kis_app_key: ""             # .env 파일에서 KIS_APP_KEY 를 설정하세요
+  kis_app_secret: ""          # .env 파일에서 KIS_APP_SECRET 를 설정하세요
+  kis_account_no: ""          # .env 파일에서 KIS_ACCOUNT_NO 를 설정하세요
+  kis_account_suffix: "01"    # 계좌부호 2자리 (보통 01, .env 오버라이드 가능)
+  kis_virtual_trading: true   # 모의투자 여부 (true/false)
+  telegram_token: ""          # .env 파일에서 TELEGRAM_TOKEN 을 설정하세요
+  chat_id: ""                 # .env 파일에서 TELEGRAM_CHAT_ID 를 설정하세요
+  gemini_api_key: ""          # .env 파일에서 GEMINI_API_KEY 를 설정하세요
 
 trading:
   universe:

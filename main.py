@@ -21,6 +21,7 @@ from strategies.trend_following import TrendFollowing
 from strategies.extreme_growth_strategy import ExtremeGrowthStrategy
 
 # 로깅 설정
+os.makedirs("logs", exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -30,9 +31,26 @@ logging.basicConfig(
     ]
 )
 
+from dotenv import load_dotenv
+
 def load_config():
+    load_dotenv()
     with open('config.yaml', 'r', encoding='utf-8') as f:
-        return yaml.safe_load(f)
+        config = yaml.safe_load(f)
+        
+    # 환경 변수에서 시크릿 값 로드 (config.yaml 덮어쓰기)
+    if 'auth' not in config:
+        config['auth'] = {}
+        
+    config['auth']['kis_app_key'] = os.getenv('KIS_APP_KEY', config['auth'].get('kis_app_key', ''))
+    config['auth']['kis_app_secret'] = os.getenv('KIS_APP_SECRET', config['auth'].get('kis_app_secret', ''))
+    config['auth']['kis_account_no'] = os.getenv('KIS_ACCOUNT_NO', config['auth'].get('kis_account_no', ''))
+    config['auth']['kis_account_suffix'] = os.getenv('KIS_ACCOUNT_SUFFIX', config['auth'].get('kis_account_suffix', '01'))
+    config['auth']['telegram_token'] = os.getenv('TELEGRAM_TOKEN', config['auth'].get('telegram_token', ''))
+    config['auth']['chat_id'] = os.getenv('TELEGRAM_CHAT_ID', config['auth'].get('chat_id', ''))
+    config['auth']['gemini_api_key'] = os.getenv('GEMINI_API_KEY', config['auth'].get('gemini_api_key', ''))
+    
+    return config
 
 def main():
     config = load_config()
