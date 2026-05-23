@@ -27,6 +27,7 @@ from dotenv import load_dotenv
 load_dotenv()
 kis_account_no = os.getenv('KIS_ACCOUNT_NO', 'Unknown')
 kis_account_suffix = os.getenv('KIS_ACCOUNT_SUFFIX', '01')
+investment_budget = int(os.getenv('INVESTMENT_BUDGET', '10000'))
 
 # 사이드바 설정
 st.sidebar.markdown(
@@ -47,6 +48,7 @@ st.sidebar.markdown(
 st.sidebar.title("💎 Trading Bot Control")
 st.sidebar.info("시스템 상태: 🟢 가동 중")
 st.sidebar.write(f"**KIS Account:** `{kis_account_no}-{kis_account_suffix}`")
+st.sidebar.write(f"**투자 운영 금액:** `{investment_budget:,}원`")
 refresh_rate = st.sidebar.slider("새로고침 간격(초)", 5, 60, 10)
 
 # 메인 타이틀
@@ -55,9 +57,9 @@ st.markdown("<h2 style='font-size: 28px; font-weight: bold; margin-bottom: 20px;
 # 데이터 로드
 df = get_data()
 
-# 목표 설정 (1만원 -> 10만원 도전)
-INITIAL_SEED = 10000
-TARGET_GOAL = 100000
+# 목표 설정 (초기 자본금 -> 1,000% 수익 도전)
+INITIAL_SEED = investment_budget
+TARGET_GOAL = INITIAL_SEED * 10
 
 if not df.empty:
     # 1. 상단 메트릭 (총 수익, 승률 등)
@@ -73,7 +75,7 @@ if not df.empty:
 
     # 1.5 챌린지 현황판
     st.divider()
-    st.subheader("🎯 1,000% 수익 도전 (1만원 → 10만원)")
+    st.subheader(f"🎯 1,000% 수익 도전 ({INITIAL_SEED:,}원 → {TARGET_GOAL:,}원)")
     current_total = INITIAL_SEED + total_profit
     progress = min(1.0, current_total / TARGET_GOAL)
     st.progress(progress)
