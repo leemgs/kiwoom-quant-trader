@@ -51,6 +51,18 @@ st.sidebar.write(f"**KIS Account:** `{kis_account_no}-{kis_account_suffix}`")
 st.sidebar.write(f"**투자 운영 금액:** `{investment_budget:,}원`")
 refresh_rate = st.sidebar.slider("새로고침 간격(초)", 5, 60, 10)
 
+st.sidebar.markdown("---")
+st.sidebar.markdown(
+    """
+    <a href="https://leemgs.github.io/stock-quant-trader-kis/" target="_blank" style="text-decoration: none;">
+        <div style='background-color: #f8f9fa; color: #333; padding: 10px; border-radius: 6px; text-align: center; border: 1px solid #ddd; font-weight: bold; font-size: 14px; transition: 0.2s;'>
+            🏠 프로젝트 공식 홈페이지
+        </div>
+    </a>
+    """,
+    unsafe_allow_html=True
+)
+
 # 메인 타이틀
 st.markdown("<h2 style='font-size: 28px; font-weight: bold; margin-bottom: 20px;'>🚀 Real-time Dashboard for Stock Quant Trader</h2>", unsafe_allow_html=True)
 
