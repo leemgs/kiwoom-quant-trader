@@ -14,7 +14,7 @@ services:
   dashboard:
     build: .
     container_name: quant_dashboard
-    command: streamlit run src/monitor/dashboard.py
+    command: streamlit run src/monitor/dashboard.py --server.address=0.0.0.0
     ports:
       - "8501:8501"
     volumes:
