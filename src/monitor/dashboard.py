@@ -52,6 +52,7 @@ st.sidebar.write(f"**투자 운영 금액:** `{investment_budget:,}원`")
 st.sidebar.markdown("---")
 st.sidebar.subheader("⏰ 매매 운영 시간")
 st.sidebar.markdown("""
+- **운영 요일**: 월 ~ 금 (공휴일 제외)
 - **개장 준비**: 08:50 ~ 09:00
 - **자동 매매**: 09:00 ~ 15:15
 - **강제 청산**: 15:15 (미수 방지)
