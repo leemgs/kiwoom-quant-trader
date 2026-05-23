@@ -114,5 +114,4 @@ class ExtremeGrowthStrategy(BaseStrategy):
                 
                 # (루프 간 지연 방지용)
                 time.sleep(0.1) 
-            
-            break # 데모 실행을 위해 한번 돌고 종료
+
