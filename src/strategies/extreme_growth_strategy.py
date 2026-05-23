@@ -40,11 +40,17 @@ class ExtremeGrowthStrategy(BaseStrategy):
 
     def scan_event_driven_news(self, current_news_feed):
         """DART 공시 및 뉴스 속보를 스크래핑하여 즉각 반응 (임상성공, 무상증자 등)"""
+        if not hasattr(self, 'seen_news'):
+            self.seen_news = set()
+            
         keywords = ["무상증자", "임상 성공", "경영권 분쟁", "공급계약", "상한가"]
         for news in current_news_feed:
             if any(keyword in news['title'] for keyword in keywords):
-                print(f"🔥 [초강력 재료 포착] {news['code']} - {news['title']} (0.1초 내 진입 시도)")
-                return news['code']
+                news_id = f"{news['code']}_{news['title']}"
+                if news_id not in self.seen_news:
+                    print(f"🔥 [초강력 재료 포착] {news['code']} - {news['title']} (0.1초 내 진입 시도)")
+                    self.seen_news.add(news_id)
+                    return news['code']
         return None
 
     def analyze_micro_scalping_orderbook(self, code, orderbook_data):
@@ -95,17 +101,22 @@ class ExtremeGrowthStrategy(BaseStrategy):
                 is_breakout = self.analyze_micro_scalping_orderbook(code, orderbook_data)
 
                 if news_target == code or is_breakout:
-                    # 4. 켈리 공식 및 미수 레버리지 자금 할당
-                    budget = self.leverage_manager.get_optimal_budget(
-                        current_account_balance=10000, 
-                        use_margin=self.config.get('use_margin_leverage', True)
-                    )
-                    target_qty = int(budget / current_price)
-                    
-                    if target_qty > 0:
-                        print(f"💰 [자금관리] 켈리 베팅 기반 풀레버리지 진입: 목표 예산 {budget}원 (수량: {target_qty}주)")
-                        # 5. 스마트 지정가 매수 라우팅
-                        self.smart_order_routing(code, target_qty, "BUY", current_price, orderbook_data)
+                    if not hasattr(self, 'mock_orders_placed'):
+                        self.mock_orders_placed = set()
+                        
+                    if code not in self.mock_orders_placed:
+                        # 4. 켈리 공식 및 미수 레버리지 자금 할당
+                        budget = self.leverage_manager.get_optimal_budget(
+                            current_account_balance=10000, 
+                            use_margin=self.config.get('use_margin_leverage', True)
+                        )
+                        target_qty = int(budget / current_price)
+                        
+                        if target_qty > 0:
+                            print(f"💰 [자금관리] 켈리 베팅 기반 풀레버리지 진입: 목표 예산 {budget}원 (수량: {target_qty}주)")
+                            # 5. 스마트 지정가 매수 라우팅
+                            self.smart_order_routing(code, target_qty, "BUY", current_price, orderbook_data)
+                            self.mock_orders_placed.add(code)
 
                 # 6. 상한가 오버나잇 결정
                 if self.decide_limit_up_overnight(code, current_price, limit_up_price, orderbook_data):
@@ -114,4 +125,6 @@ class ExtremeGrowthStrategy(BaseStrategy):
                 
                 # (루프 간 지연 방지용)
                 time.sleep(0.1) 
-
+                
+            # 유니버스 전체 순회 후 서버 부하 방지를 위해 2초 대기
+            time.sleep(2.0)
