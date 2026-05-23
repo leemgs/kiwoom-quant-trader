@@ -76,8 +76,12 @@ class ExtremeGrowthStrategy(BaseStrategy):
             
             # 1. 15:15 미수 동결 방지 강제 청산 체크
             if self.leverage_manager.enforce_margin_liquidation(current_time):
-                logging.warning("⚠️ [리스크 관리] 장 마감 임박. 미수 동결을 막기 위해 전 종목 강제 청산 (상한가 오버나잇 예외 제외)")
+                if not getattr(self, 'liquidation_triggered', False):
+                    logging.warning("⚠️ [리스크 관리] 장 마감 임박. 미수 동결을 막기 위해 전 종목 강제 청산 (상한가 오버나잇 예외 제외)")
+                    self.liquidation_triggered = True
                 pass
+            else:
+                self.liquidation_triggered = False
 
             for code in self.universe:
                 # API를 통해 실시간 호가 및 현재가 수신 (Mock)
