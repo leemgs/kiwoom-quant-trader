@@ -22,9 +22,16 @@ def get_data():
     except:
         return pd.DataFrame()
 
+from dotenv import load_dotenv
+
+load_dotenv()
+kis_account_no = os.getenv('KIS_ACCOUNT_NO', 'Unknown')
+kis_account_suffix = os.getenv('KIS_ACCOUNT_SUFFIX', '01')
+
 # 사이드바 설정
 st.sidebar.title("💎 Trading Bot Control")
 st.sidebar.info("시스템 상태: 🟢 가동 중")
+st.sidebar.write(f"**KIS Account:** `{kis_account_no}-{kis_account_suffix}`")
 refresh_rate = st.sidebar.slider("새로고침 간격(초)", 5, 60, 10)
 
 # 메인 타이틀
