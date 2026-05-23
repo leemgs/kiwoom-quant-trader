@@ -21,6 +21,10 @@ class ExtremeGrowthStrategy(BaseStrategy):
         initial_capital = config.get('trading', {}).get('max_budget', 10000)
         self.leverage_manager = DynamicLeverageManager(initial_capital=initial_capital)
         
+    def check_signal(self, code, df):
+        """BaseStrategy의 추상 메서드 구현. 해당 전략은 run()에서 자체 로직을 사용하므로 여기서는 사용하지 않음."""
+        return False
+        
     def smart_order_routing(self, code, target_qty, order_type="BUY", current_price=0, orderbook=None):
         """시장가(Taker) 대신 최적의 호가에 지정가(Maker)로 깔아 수수료 및 슬리피지 방어"""
         if not self.config.get('smart_order_routing', False):
