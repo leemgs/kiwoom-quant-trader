@@ -15,6 +15,7 @@ class ExtremeGrowthStrategy(BaseStrategy):
         self.stop_loss = config.get('trading', {}).get('stop_loss', 0.015)
         
         initial_capital = config.get('trading', {}).get('max_budget', 10000)
+        self.initial_capital = initial_capital
         self.leverage_manager = DynamicLeverageManager(initial_capital=initial_capital)
         
     def check_signal(self, code, df):
@@ -103,7 +104,7 @@ class ExtremeGrowthStrategy(BaseStrategy):
                     if code not in self.mock_orders_placed:
                         # 4. 켈리 공식 및 미수 레버리지 자금 할당
                         budget = self.leverage_manager.get_optimal_budget(
-                            current_account_balance=10000, 
+                            current_account_balance=self.initial_capital, 
                             use_margin=self.config.get('use_margin_leverage', True)
                         )
                         target_qty = int(budget / current_price)

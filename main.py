@@ -50,6 +50,13 @@ def load_config():
     config['auth']['slack_channel_id'] = os.getenv('SLACK_CHANNEL_ID', config['auth'].get('slack_channel_id', ''))
     config['auth']['gemini_api_key'] = os.getenv('GEMINI_API_KEY', config['auth'].get('gemini_api_key', ''))
     
+    # 덮어쓰기: INVESTMENT_BUDGET 환경변수가 존재하면 trading.max_budget을 갱신
+    if 'trading' not in config:
+        config['trading'] = {}
+    env_budget = os.getenv('INVESTMENT_BUDGET')
+    if env_budget and env_budget.isdigit():
+        config['trading']['max_budget'] = int(env_budget)
+        
     return config
 
 def main():
