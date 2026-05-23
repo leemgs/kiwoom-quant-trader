@@ -11,7 +11,7 @@ from datetime import datetime
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 # 페이지 설정
-st.set_page_config(page_title="Antigravity Quant Dashboard", layout="wide")
+st.set_page_config(page_title="Real-time Dashboard for Stock Quant Trader", layout="wide")
 
 def get_data():
     try:
@@ -28,7 +28,7 @@ st.sidebar.info("시스템 상태: 🟢 가동 중")
 refresh_rate = st.sidebar.slider("새로고침 간격(초)", 5, 60, 10)
 
 # 메인 타이틀
-st.title("🚀 Antigravity Real-time Quant Dashboard")
+st.title("🚀 Real-time Dashboard for Stock Quant Trader")
 
 # 데이터 로드
 df = get_data()
