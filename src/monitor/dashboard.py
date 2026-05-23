@@ -29,6 +29,11 @@ kis_account_no = os.getenv('KIS_ACCOUNT_NO', 'Unknown')
 kis_account_suffix = os.getenv('KIS_ACCOUNT_SUFFIX', '01')
 investment_budget = int(os.getenv('INVESTMENT_BUDGET', '10000'))
 
+# 데이터 로드 및 현재 자산 계산
+df = get_data()
+total_profit = df['profit'].sum() if not df.empty else 0
+current_total = investment_budget + total_profit
+
 # 사이드바 설정
 st.sidebar.markdown(
     f"""
@@ -48,7 +53,8 @@ st.sidebar.markdown(
 시스템 상태: 🟢 가동 중
 </div>
 <p style="margin: 0 0 5px 0; font-size: 13px;"><strong>KIS Account:</strong> <code>{kis_account_no}-{kis_account_suffix}</code></p>
-<p style="margin: 0 0 15px 0; font-size: 13px;"><strong>투자 운영 금액:</strong> <code>{investment_budget:,}원</code></p>
+<p style="margin: 0 0 5px 0; font-size: 13px;"><strong>투자 운영 금액:</strong> <code>{investment_budget:,}원</code></p>
+<p style="margin: 0 0 15px 0; font-size: 13px;"><strong>투자 운영 결과:</strong> <code style="color: {'#e53935' if current_total < investment_budget else '#1e88e5' if current_total > investment_budget else '#333'}; font-weight: bold;">{current_total:,}원</code></p>
 
 <h4 style="margin: 0 0 5px 0; font-size: 15px;">⏰ 매매 운영 시간</h4>
 <ul style="margin: 0 0 15px 0; padding-left: 20px; font-size: 12px; color: #444; line-height: 1.4;">
@@ -77,9 +83,6 @@ st.sidebar.markdown(
 
 # 메인 타이틀
 st.markdown("<h2 style='font-size: 28px; font-weight: bold; margin-bottom: 20px;'>🚀 Real-time Dashboard for Stock Quant Trader</h2>", unsafe_allow_html=True)
-
-# 데이터 로드
-df = get_data()
 
 # 목표 설정 (초기 자본금 -> 1,000% 수익 도전)
 INITIAL_SEED = investment_budget
