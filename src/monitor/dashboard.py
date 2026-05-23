@@ -29,6 +29,21 @@ kis_account_no = os.getenv('KIS_ACCOUNT_NO', 'Unknown')
 kis_account_suffix = os.getenv('KIS_ACCOUNT_SUFFIX', '01')
 
 # 사이드바 설정
+st.sidebar.markdown(
+    """
+    <div style='background-color: #ffffff; padding: 15px; border-radius: 10px; text-align: center; margin-bottom: 20px; border: 1px solid #e0e0e0; box-shadow: 0 4px 6px rgba(0,0,0,0.05);'>
+        <h3 style='color: #03256C; margin-top: 0px; margin-bottom: 5px; font-weight: 900; letter-spacing: 1px;'>한국투자증권</h3>
+        <p style='color: #666; font-size: 11px; margin-bottom: 12px; font-weight: 600;'>KOREA INVESTMENT & SECURITIES</p>
+        <a href='https://apiportal.koreainvestment.com/' target='_blank' style='text-decoration: none;'>
+            <div style='background-color: #03256C; color: white; padding: 8px 10px; border-radius: 6px; font-size: 13px; font-weight: bold; transition: 0.3s;'>
+                🚀 KIS Developers (Open API)
+            </div>
+        </a>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
 st.sidebar.title("💎 Trading Bot Control")
 st.sidebar.info("시스템 상태: 🟢 가동 중")
 st.sidebar.write(f"**KIS Account:** `{kis_account_no}-{kis_account_suffix}`")
