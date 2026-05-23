@@ -49,6 +49,13 @@ st.sidebar.title("💎 Trading Bot Control")
 st.sidebar.info("시스템 상태: 🟢 가동 중")
 st.sidebar.write(f"**KIS Account:** `{kis_account_no}-{kis_account_suffix}`")
 st.sidebar.write(f"**투자 운영 금액:** `{investment_budget:,}원`")
+st.sidebar.markdown("---")
+st.sidebar.subheader("⏰ 매매 운영 시간")
+st.sidebar.markdown("""
+- **개장 준비**: 08:50 ~ 09:00
+- **자동 매매**: 09:00 ~ 15:15
+- **강제 청산**: 15:15 (미수 방지)
+""")
 refresh_rate = st.sidebar.slider("새로고침 간격(초)", 5, 60, 10)
 
 st.sidebar.markdown("---")
