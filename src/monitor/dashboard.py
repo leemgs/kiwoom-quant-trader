@@ -33,32 +33,32 @@ investment_budget = int(os.getenv('INVESTMENT_BUDGET', '10000'))
 st.sidebar.markdown(
     f"""
 <div style='background-color: #ffffff; padding: 15px; border-radius: 10px; text-align: center; margin-bottom: 15px; border: 1px solid #e0e0e0; box-shadow: 0 4px 6px rgba(0,0,0,0.05);'>
-    <h3 style='color: #03256C; margin: 0 0 3px 0; font-weight: 900; letter-spacing: 1px;'>한국투자증권</h3>
-    <p style='color: #666; font-size: 11px; margin: 0 0 10px 0; font-weight: 600;'>KOREA INVESTMENT & SECURITIES</p>
-    <a href='https://apiportal.koreainvestment.com/' target='_blank' style='text-decoration: none;'>
-        <div style='background-color: #03256C; color: white; padding: 6px 10px; border-radius: 6px; font-size: 12px; font-weight: bold;'>
-            🚀 KIS Developers (Open API)
-        </div>
-    </a>
+<h3 style='color: #03256C; margin: 0 0 3px 0; font-weight: 900; letter-spacing: 1px;'>한국투자증권</h3>
+<p style='color: #666; font-size: 11px; margin: 0 0 10px 0; font-weight: 600;'>KOREA INVESTMENT & SECURITIES</p>
+<a href='https://apiportal.koreainvestment.com/' target='_blank' style='text-decoration: none;'>
+<div style='background-color: #03256C; color: white; padding: 6px 10px; border-radius: 6px; font-size: 12px; font-weight: bold;'>
+🚀 KIS Developers (Open API)
+</div>
+</a>
 </div>
 
 <div style="margin-bottom: 10px;">
-    <h4 style="margin: 0 0 8px 0; font-size: 16px;">💎 Trading Bot Control</h4>
-    <div style="background-color: #e8f5e9; padding: 8px; border-radius: 5px; color: #2e7d32; font-size: 13px; font-weight: bold; margin-bottom: 10px;">
-        시스템 상태: 🟢 가동 중
-    </div>
-    <p style="margin: 0 0 5px 0; font-size: 13px;"><strong>KIS Account:</strong> <code>{kis_account_no}-{kis_account_suffix}</code></p>
-    <p style="margin: 0 0 15px 0; font-size: 13px;"><strong>투자 운영 금액:</strong> <code>{investment_budget:,}원</code></p>
-    
-    <h4 style="margin: 0 0 5px 0; font-size: 15px;">⏰ 매매 운영 시간</h4>
-    <ul style="margin: 0 0 15px 0; padding-left: 20px; font-size: 12px; color: #444; line-height: 1.4;">
-        <li><strong>운영 요일</strong>: 월 ~ 금 (공휴일 제외)</li>
-        <li><strong>개장 준비</strong>: 08:50 ~ 09:00</li>
-        <li><strong>자동 매매</strong>: 09:00 ~ 15:15</li>
-        <li><strong>강제 청산</strong>: 15:15 (미수 방지)</li>
-    </ul>
+<h4 style="margin: 0 0 8px 0; font-size: 16px;">💎 Trading Bot Control</h4>
+<div style="background-color: #e8f5e9; padding: 8px; border-radius: 5px; color: #2e7d32; font-size: 13px; font-weight: bold; margin-bottom: 10px;">
+시스템 상태: 🟢 가동 중
 </div>
-    """,
+<p style="margin: 0 0 5px 0; font-size: 13px;"><strong>KIS Account:</strong> <code>{kis_account_no}-{kis_account_suffix}</code></p>
+<p style="margin: 0 0 15px 0; font-size: 13px;"><strong>투자 운영 금액:</strong> <code>{investment_budget:,}원</code></p>
+
+<h4 style="margin: 0 0 5px 0; font-size: 15px;">⏰ 매매 운영 시간</h4>
+<ul style="margin: 0 0 15px 0; padding-left: 20px; font-size: 12px; color: #444; line-height: 1.4;">
+<li><strong>운영 요일</strong>: 월 ~ 금 (공휴일 제외)</li>
+<li><strong>개장 준비</strong>: 08:50 ~ 09:00</li>
+<li><strong>자동 매매</strong>: 09:00 ~ 15:15</li>
+<li><strong>강제 청산</strong>: 15:15 (미수 방지)</li>
+</ul>
+</div>
+""",
     unsafe_allow_html=True
 )
 refresh_rate = st.sidebar.slider("새로고침 간격(초)", 5, 60, 10)
