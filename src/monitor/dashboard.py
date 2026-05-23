@@ -34,6 +34,21 @@ df = get_data()
 total_profit = df['profit'].sum() if not df.empty else 0
 current_total = investment_budget + total_profit
 
+from datetime import timezone, timedelta
+kst = timezone(timedelta(hours=9))
+now = datetime.now(kst)
+is_trading = False
+if now.weekday() < 5:
+    if now.hour == 8 and now.minute >= 50:
+        is_trading = True
+    elif now.hour >= 9 and now.hour < 15:
+        is_trading = True
+    elif now.hour == 15 and now.minute <= 20:
+        is_trading = True
+
+status_bg = "#e8f5e9" if is_trading else "#f5f5f5"
+status_color = "#2e7d32" if is_trading else "#555555"
+
 # 사이드바 설정
 st.sidebar.markdown(
     f"""
@@ -49,8 +64,9 @@ st.sidebar.markdown(
 
 <div style="margin-bottom: 10px;">
 <h4 style="margin: 0 0 8px 0; font-size: 16px;">💎 Trading Bot Control</h4>
-<div style="background-color: #e8f5e9; padding: 8px; border-radius: 5px; color: #2e7d32; font-size: 13px; font-weight: bold; margin-bottom: 10px;">
-시스템 상태: 🟢 가동 중
+<div style="background-color: {status_bg}; padding: 8px; border-radius: 5px; color: {status_color}; font-size: 13px; font-weight: bold; margin-bottom: 10px; line-height: 1.5;">
+시스템 상태: 🟢 가동 중<br>
+자동매매 상태: {'⚔️ 전투 중' if is_trading else '💤 휴식 중'}
 </div>
 <p style="margin: 0 0 5px 0; font-size: 13px;"><strong>KIS Account:</strong> <code>{kis_account_no}-{kis_account_suffix}</code></p>
 <p style="margin: 0 0 5px 0; font-size: 13px;"><strong>투자 운영 금액:</strong> <code>{investment_budget:,}원</code></p>
