@@ -11,7 +11,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
 from broker.kis_api import KISBroker
 from core.ensemble_engine import EnsembleEngine
-from core.notifier import TelegramNotifier
+from core.notifier import SlackNotifier
 from core.database import TradeDatabase
 from core.risk_manager import MarketRiskManager
 from core.macro_collector import MacroCollector
@@ -46,8 +46,8 @@ def load_config():
     config['auth']['kis_app_secret'] = os.getenv('KIS_APP_SECRET', config['auth'].get('kis_app_secret', ''))
     config['auth']['kis_account_no'] = os.getenv('KIS_ACCOUNT_NO', config['auth'].get('kis_account_no', ''))
     config['auth']['kis_account_suffix'] = os.getenv('KIS_ACCOUNT_SUFFIX', config['auth'].get('kis_account_suffix', '01'))
-    config['auth']['telegram_token'] = os.getenv('TELEGRAM_TOKEN', config['auth'].get('telegram_token', ''))
-    config['auth']['chat_id'] = os.getenv('TELEGRAM_CHAT_ID', config['auth'].get('chat_id', ''))
+    config['auth']['slack_bot_token'] = os.getenv('SLACK_BOT_TOKEN', config['auth'].get('slack_bot_token', ''))
+    config['auth']['slack_channel_id'] = os.getenv('SLACK_CHANNEL_ID', config['auth'].get('slack_channel_id', ''))
     config['auth']['gemini_api_key'] = os.getenv('GEMINI_API_KEY', config['auth'].get('gemini_api_key', ''))
     
     return config
@@ -58,7 +58,7 @@ def main():
     # 1. 시스템 초기화
     print("🚀 Antigravity Quant Trader (KIS Edition) 시스템 시동 중...")
     db = TradeDatabase()
-    notifier = TelegramNotifier(config['auth']['telegram_token'], config['auth']['chat_id'])
+    notifier = SlackNotifier(config['auth']['slack_bot_token'], config['auth']['slack_channel_id'])
     
     # 2. KIS API 브로커 초기화 (Ubuntu 호환)
     broker = KISBroker(config)
