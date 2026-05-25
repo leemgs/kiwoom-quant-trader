@@ -1,10 +1,11 @@
 import sys
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import pandas as pd
 import yaml
 import logging
+import holidays
 
 # src 디렉토리를 path에 추가하여 모듈 임포트 지원
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
@@ -98,32 +99,53 @@ def main():
     try:
         while True:
             now = datetime.now()
-            # 장중 시간 확인 (09:00 ~ 15:20)
-            if now.hour >= 9 and (now.hour < 15 or (now.hour == 15 and now.minute <= 20)):
-                # 글로벌 리스크 확인
-                multiplier = risk_manager.get_trading_multiplier()
-                
-                if multiplier > 0:
-                    for code in universe:
-                        # 현재가 및 데이터 수집 (실제 구현 시 KIS API 활용 데이터프레임 생성 필요)
-                        price = broker.get_price(code)
-                        df = pd.DataFrame() # 데이터 수집 로직 (샘플)
-                        
-                        if ensemble.get_signals(code, df):
-                            print(f"🎯 [{code}] 매수 조건 충족! 현재가: {price}")
-                            # 주문 집행
-                            # qty = int((config['trading']['max_budget'] * multiplier) / price)
-                            # broker.send_order(code, qty, price, order_type="01")
-                            # db.log_trade(...)
-                            # notifier.notify_order(...)
-                else:
-                    logging.warning("⚠️ 글로벌 리스크 과다로 매매 일시 정지")
+            # 현재 KST 기준으로 한국·미국 공휴일 및 거래 가능 여부 확인
+            kst = timezone(timedelta(hours=9))
+            today = datetime.now(kst).date()
+            kr_holidays = holidays.CountryHoliday('KR')
+            us_holidays = holidays.CountryHoliday('US')
+            is_kor_holiday = today in kr_holidays
+            is_us_holiday = today in us_holidays
+            # 한국 시장 트레이딩 가능 여부 (09:00~15:20 KST)
+            is_kor_trading = (not is_kor_holiday and now.weekday() < 5 and (
+                (now.hour == 8 and now.minute >= 50) or
+                (now.hour >= 9 and now.hour < 15) or
+                (now.hour == 15 and now.minute <= 20)
+            ))
+            # 미국 시장 트레이딩 가능 여부 (평일·공휴일 체크, 시간대 변환 간소화)
+            is_us_trading = (not is_us_holiday and now.weekday() < 5)
+            # 어느 시장도 열려 있지 않다면 자동 매매 일시 정지
+            if not (is_kor_trading or is_us_trading):
+                logging.info("📅 오늘은 한국·미국 모두 휴일이거나 거래 시간이 아닙니다. 자동매매를 일시 정지합니다.")
+                time.sleep(300)
+                continue
+            # 활성화된 시장에 맞는 티커 리스트 구성
+            active_universe = []
+            if is_kor_trading:
+                active_universe.extend(universe)  # KR 티커
+            if is_us_trading:
+                us_universe = config.get('trading', {}).get('us_universe', ['AAPL.US', 'MSFT.US', 'GOOGL.US'])
+                active_universe.extend(us_universe)
+            # 글로벌 리스크 확인
+            multiplier = risk_manager.get_trading_multiplier()
+            if multiplier > 0:
+                for code in active_universe:
+                    price = broker.get_price(code)
+                    df = pd.DataFrame()  # 실제 데이터 수집 로직은 추후 구현
+                    if ensemble.get_signals(code, df):
+                        print(f"🎯 [{code}] 매수 조건 충족! 현재가: {price}")
+                        # 주문 로직 (주석 처리)
+                        # qty = int((config['trading']['max_budget'] * multiplier) / price)
+                        # broker.send_order(code, qty, price, order_type="01")
+                        # db.log_trade(...)
+                        # notifier.notify_order(...)
             else:
-                if now.hour == 15 and now.minute > 30:
-                    print("💤 장 종료. 시스템을 대기 모드로 전환합니다.")
-                    time.sleep(3600)
-            
-            time.sleep(10) # API 호출 제한을 고려하여 주기 조정
+                logging.warning("⚠️ 글로벌 리스크 과다로 매매 일시 정지")
+            # 한국 장 종료 후 대기 처리
+            if now.hour == 15 and now.minute > 30:
+                print("💤 장 종료. 시스템을 대기 모드로 전환합니다.")
+                time.sleep(3600)
+            time.sleep(10)  # API 호출 제한을 고려하여 주기 조정
     except KeyboardInterrupt:
         print("\n🛑 사용자에 의해 시스템이 중단되었습니다.")
     except Exception as e:
