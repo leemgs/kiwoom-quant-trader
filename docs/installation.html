@@ -65,9 +65,23 @@
             <h4 style="font-size: 1.6rem; margin-bottom: 1rem; color: var(--text-color);">프로젝트 환경 구축</h4>
             <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: 1.05rem;">터미널(또는 명령 프롬프트)을 열고 아래 명령어를 순서대로 실행하세요.</p>
             <div class="code-box" style="overflow-x: auto; font-size: 1.1rem;">
-                <pre style="margin: 0; font-family: 'Courier New', monospace; color: #a5d6ff; line-height: 1.6;">git clone https://github.com/leemgs/stock-quant-trader.git
-cd stock-quant-trader
+                <pre style="margin: 0; font-family: 'Courier New', monospace; color: #a5d6ff; line-height: 1.6;">git clone https://github.com/leemgs/stock-quant-trader-kis.git
+cd stock-quant-trader-kis
 pip install -r requirements.txt</pre>
+            </div>
+        </div>
+
+        <div class="step fade-in" style="margin-top: 3rem; max-width: 800px;">
+            <span class="step-num" style="top: -2.5rem;">05</span>
+            <h4 style="font-size: 1.6rem; margin-bottom: 1rem; color: var(--text-color);">설정(.env) 및 봇 가동</h4>
+            <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: 1.05rem;">기존의 복잡한 yaml 설정 파일을 없애고, <strong>.env 하나로 완벽 제어</strong>가 가능합니다.</p>
+            <div class="code-box" style="overflow-x: auto; font-size: 1.1rem;">
+                <pre style="margin: 0; font-family: 'Courier New', monospace; color: #a5d6ff; line-height: 1.6;"># 1. 샘플 파일을 복제하여 .env 생성
+cp .env.sample .env
+
+# 2. .env 편집기(vi, nano 등)로 열어 KIS 키 및 트레이딩 종목 등 편집
+# 3. 봇 및 대시보드 가동
+docker-compose up -d --build</pre>
             </div>
         </div>
     </main>

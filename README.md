@@ -72,11 +72,13 @@ graph TD
 
 ### 핵심 모듈 기능
 - **Core Engine**: `kis-developers`를 이용한 한국투자증권 REST/WebSocket 통신 제어.
+- **Dual-Market Engine**: 단일 봇에서 국내 주식(KOSPI/KOSDAQ) 및 미국 주식(NYSE/NASDAQ) 유니버스를 동시에 지원하고 교차 매매 수행.
+- **Holiday-Aware Scheduler**: 한국(KR) 및 미국(US) 국가 공휴일을 실시간 확인하여, 휴장일에는 자동으로 거래를 멈추고 5분 단위 저전력 대기모드로 진입해 오작동 및 불필요한 API 호출을 원천 차단.
 - **Strategy Manager**: **앙상블(Ensemble) 엔진** 탑재. 돌파, 평균회귀, 추세추종 전략의 가중 투표 방식 채택.
 - **Risk Manager**: **글로벌 세이프 가드(Safe Guard)** 탑재. 나스닥 및 환율 추이에 따라 매매 비중 자동 조절.
 - **Paper Trading Engine**: 실시간 호가 잔량 및 슬리피지를 반영한 정밀 가상 매매 시뮬레이터.
 - **Ensemble Engine**: 전략별 실시간 성과를 추적하여 자산을 동적으로 배분.
-- **Genetic Optimizer**: 유전 알고리즘을 통해 최적의 매매 파라미터($K$값 등)를 스스로 학습 및 진화.
+- **Genetic Optimizer**: 유전 알고리즘을 통해 최적의 매매 파라미터($K$값 등)를 스스로 학습 및 진화하여 `.env`에 직접 업데이트 및 저장.
 - **Compound Manager**: **복리 자금 관리 엔진**. 수익금을 자동으로 재투자하여 자산 성장을 가속화.
 - **Volatility Filter**: 거래대금이 폭발하는 **급등 주도주** 실시간 포착 엔진.
 - **AI News Analyzer**: **Google Gemini API**를 연동하여 실시간 뉴스의 호재/악재를 점수화.
