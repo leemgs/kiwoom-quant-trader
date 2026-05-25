@@ -5,7 +5,8 @@ import pandas as pd
 import sqlite3
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+import holidays
 
 # sys.path 설정: src 폴더를 포함하여 analytics 등을 임포트 가능하도록 함
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
@@ -29,25 +30,42 @@ kis_account_no = os.getenv('KIS_ACCOUNT_NO', 'Unknown')
 kis_account_suffix = os.getenv('KIS_ACCOUNT_SUFFIX', '01')
 investment_budget = int(os.getenv('INVESTMENT_BUDGET', '10000'))
 
+# ---------------------------------------------------
+# Holiday & market status utilities
+# ---------------------------------------------------
+kst = timezone(timedelta(hours=9))
+now = datetime.now(kst)
+today = now.date()
+
+# Korean holidays (including substitute holidays)
+kr_holidays = holidays.CountryHoliday('KR')
+is_kor_holiday = today in kr_holidays
+
+# US market holidays (NYSE calendar)
+us_holidays = holidays.CountryHoliday('US')
+is_us_holiday = today in us_holidays
+
+# Determine if each market is tradable now
+# Korean market trading window (same as before)
+is_kor_trading = not is_kor_holiday and now.weekday() < 5 and (
+    (now.hour == 8 and now.minute >= 50) or
+    (now.hour >= 9 and now.hour < 15) or
+    (now.hour == 15 and now.minute <= 20)
+)
+# US market trading window (NYSE 09:30-16:00 ET, which is 22:30-05:00 KST next day)
+# For simplicity we only check if today is a weekday and not a US holiday.
+is_us_trading = not is_us_holiday and now.weekday() < 5
+
 # 데이터 로드 및 현재 자산 계산
 df = get_data()
 total_profit = df['profit'].sum() if not df.empty else 0
 current_total = investment_budget + total_profit
 
-from datetime import timezone, timedelta
-kst = timezone(timedelta(hours=9))
-now = datetime.now(kst)
-is_trading = False
-if now.weekday() < 5:
-    if now.hour == 8 and now.minute >= 50:
-        is_trading = True
-    elif now.hour >= 9 and now.hour < 15:
-        is_trading = True
-    elif now.hour == 15 and now.minute <= 20:
-        is_trading = True
-
-status_bg = "#e8f5e9" if is_trading else "#f5f5f5"
-status_color = "#2e7d32" if is_trading else "#555555"
+# ---------------------------------------------------
+# Sidebar: auto‑trading status with per‑country flags
+# ---------------------------------------------------
+status_bg = "#e8f5e9" if is_kor_trading else "#f5f5f5"
+status_color = "#2e7d32" if is_kor_trading else "#555555"
 
 # 사이드바 설정
 st.sidebar.markdown(
@@ -66,7 +84,7 @@ st.sidebar.markdown(
 <h4 style="margin: 0 0 8px 0; font-size: 16px;">💎 Trading Bot Control</h4>
 <div style="background-color: {status_bg}; padding: 8px; border-radius: 5px; color: {status_color}; font-size: 13px; font-weight: bold; margin-bottom: 10px; line-height: 1.5;">
 시스템 상태: 🟢 가동 중<br>
-자동매매 상태: {'⚔️ 전투 중' if is_trading else '💤 휴식 중'}
+자동매매 상태: ⚔️ 전투 중 (한국:{'O' if not is_kor_holiday else 'X'}, 미국:{'O' if not is_us_holiday else 'X'})
 </div>
 <p style="margin: 0 0 5px 0; font-size: 13px;"><strong>KIS Account:</strong> <code>{kis_account_no}-{kis_account_suffix}</code></p>
 <p style="margin: 0 0 5px 0; font-size: 13px;"><strong>투자 운영 금액:</strong> <code>{investment_budget:,}원</code></p>
@@ -76,7 +94,11 @@ st.sidebar.markdown(
     unsafe_allow_html=True
 )
 
-with st.sidebar.expander("⏰ 매매 운영 시간 확인"):
+# ---------------------------------------------------
+# Expander for trading‑hours with holiday info and info icon
+# ---------------------------------------------------
+expander_title = f"⏰ {today.strftime('%m/%d')} (한국:{'휴일' if is_kor_holiday else '평일'}, 미국:{'휴일' if is_us_holiday else '평일'}) ℹ️"
+with st.sidebar.expander(expander_title):
     st.markdown("""
     - **운영 요일**: 월 ~ 금 (공휴일 제외)
     - **개장 준비**: 08:50 ~ 09:00
