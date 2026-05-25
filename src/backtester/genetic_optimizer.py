@@ -1,6 +1,6 @@
 import numpy as np
 import random
-import yaml
+import os
 from backtester.engine import BacktestEngine
 
 class GeneticOptimizer:
@@ -55,16 +55,31 @@ class GeneticOptimizer:
         return best_genome
 
     def update_config(self, best_genome):
-        """최적의 파라미터로 config.yaml 자동 업데이트"""
+        """최적의 파라미터로 .env 자동 업데이트"""
         try:
-            with open('config.yaml', 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
+            env_file = '.env'
+            if not os.path.exists(env_file):
+                env_file = '.env.sample'
             
-            config['trading']['k_value'] = float(best_genome['k_value'])
-            # 전략별 파라미터 업데이트 로직 추가 가능
-            
-            with open('config.yaml', 'w', encoding='utf-8') as f:
-                yaml.dump(config, f, allow_unicode=True)
-            print("✅ 최적화된 파라미터가 config.yaml에 반영되었습니다.")
+            if os.path.exists(env_file):
+                with open(env_file, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+                
+                updated = False
+                for i, line in enumerate(lines):
+                    if line.strip().startswith('K_VALUE='):
+                        lines[i] = f"K_VALUE={best_genome['k_value']:.4f}\n"
+                        updated = True
+                        break
+                
+                if not updated:
+                    lines.append(f"\nK_VALUE={best_genome['k_value']:.4f}\n")
+                
+                # Write to .env (not .env.sample to protect the sample file)
+                with open('.env', 'w', encoding='utf-8') as f:
+                    f.writelines(lines)
+                print("✅ 최적화된 파라미터가 .env에 반영되었습니다.")
+            else:
+                print("❌ .env 또는 .env.sample 파일을 찾을 수 없어 파라미터를 업데이트하지 못했습니다.")
         except Exception as e:
             print(f"설정 파일 업데이트 실패: {str(e)}")

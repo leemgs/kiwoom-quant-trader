@@ -54,7 +54,20 @@ is_kor_trading = not is_kor_holiday and now.weekday() < 5 and (
 )
 # US market trading window (NYSE 09:30-16:00 ET, which is 22:30-05:00 KST next day)
 # For simplicity we only check if today is a weekday and not a US holiday.
-is_us_trading = not is_us_holiday and now.weekday() < 5
+# US market trading window (NY time: 09:30‑16:00 ET, which is 22:30‑05:00 KST next day)
+# Convert current KST to US Eastern Time (EDT)
+us_tz = timezone(timedelta(hours=-4))
+now_us = datetime.now(us_tz)
+# US market is open if it's a weekday, not a US holiday, and within ET trading hours
+is_us_trading = (
+    not is_us_holiday and
+    now_us.weekday() < 5 and
+    (
+        now_us.hour > 9 or
+        (now_us.hour == 9 and now_us.minute >= 30)
+    ) and
+    (now_us.hour < 16 or (now_us.hour == 16 and now_us.minute == 0))
+)
 
 # 데이터 로드 및 현재 자산 계산
 df = get_data()
@@ -66,6 +79,7 @@ current_total = investment_budget + total_profit
 # ---------------------------------------------------
 status_bg = "#e8f5e9" if is_kor_trading else "#f5f5f5"
 status_color = "#2e7d32" if is_kor_trading else "#555555"
+is_any_trading = is_kor_trading or is_us_trading
 
 # 사이드바 설정
 st.sidebar.markdown(
@@ -84,7 +98,7 @@ st.sidebar.markdown(
 <h4 style="margin: 0 0 8px 0; font-size: 16px;">💎 Trading Bot Control</h4>
 <div style="background-color: {status_bg}; padding: 8px; border-radius: 5px; color: {status_color}; font-size: 13px; font-weight: bold; margin-bottom: 10px; line-height: 1.5;">
 시스템 상태: 🟢 가동 중<br>
-자동매매 상태: ⚔️ 전투 중 (한국:{'O' if not is_kor_holiday else 'X'}, 미국:{'O' if not is_us_holiday else 'X'})
+자동매매 상태: {'⚔️ 전투 중' if is_any_trading else '💤 휴식 중'} (한국:{'O' if not is_kor_holiday else 'X'}, 미국:{'O' if not is_us_holiday else 'X'})
 </div>
 <p style="margin: 0 0 5px 0; font-size: 13px;"><strong>KIS Account:</strong> <code>{kis_account_no}-{kis_account_suffix}</code></p>
 <p style="margin: 0 0 5px 0; font-size: 13px;"><strong>투자 운영 금액:</strong> <code>{investment_budget:,}원</code></p>

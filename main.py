@@ -3,7 +3,7 @@ import os
 import time
 from datetime import datetime, timezone, timedelta
 import pandas as pd
-import yaml
+
 import logging
 import holidays
 
@@ -34,31 +34,58 @@ logging.basicConfig(
 
 from dotenv import load_dotenv
 
-def load_config():
+def load_config() -> dict:
+    """Load all configuration from environment variables.
+    This completely removes the need for `config.yaml`.
+    Values default to the same ones used previously.
+    """
     load_dotenv()
-    with open('config.yaml', 'r', encoding='utf-8') as f:
-        config = yaml.safe_load(f)
-        
-    # 환경 변수에서 시크릿 값 로드 (config.yaml 덮어쓰기)
-    if 'auth' not in config:
-        config['auth'] = {}
-        
-    config['auth']['kis_app_key'] = os.getenv('KIS_APP_KEY', config['auth'].get('kis_app_key', ''))
-    config['auth']['kis_app_secret'] = os.getenv('KIS_APP_SECRET', config['auth'].get('kis_app_secret', ''))
-    config['auth']['kis_account_no'] = os.getenv('KIS_ACCOUNT_NO', config['auth'].get('kis_account_no', ''))
-    config['auth']['kis_account_suffix'] = os.getenv('KIS_ACCOUNT_SUFFIX', config['auth'].get('kis_account_suffix', '01'))
-    config['auth']['slack_bot_token'] = os.getenv('SLACK_BOT_TOKEN', config['auth'].get('slack_bot_token', ''))
-    config['auth']['slack_channel_id'] = os.getenv('SLACK_CHANNEL_ID', config['auth'].get('slack_channel_id', ''))
-    config['auth']['gemini_api_key'] = os.getenv('GEMINI_API_KEY', config['auth'].get('gemini_api_key', ''))
-    
-    # 덮어쓰기: INVESTMENT_BUDGET 환경변수가 존재하면 trading.max_budget을 갱신
-    if 'trading' not in config:
-        config['trading'] = {}
-    env_budget = os.getenv('INVESTMENT_BUDGET')
-    if env_budget and env_budget.isdigit():
-        config['trading']['max_budget'] = int(env_budget)
-        
-    return config
+    # Auth section – already loaded via dotenv
+    auth = {
+        "kis_app_key": os.getenv('KIS_APP_KEY', ''),
+        "kis_app_secret": os.getenv('KIS_APP_SECRET', ''),
+        "kis_account_no": os.getenv('KIS_ACCOUNT_NO', ''),
+        "kis_account_suffix": os.getenv('KIS_ACCOUNT_SUFFIX', '01'),
+        "kis_virtual_trading": os.getenv('KIS_VIRTUAL_TRADING', 'true').lower() == 'true',
+        "slack_bot_token": os.getenv('SLACK_BOT_TOKEN', ''),
+        "slack_channel_id": os.getenv('SLACK_CHANNEL_ID', ''),
+        "gemini_api_key": os.getenv('GEMINI_API_KEY', ''),
+    }
+
+    # Helper to split comma‑separated values
+    def csv_to_list(val: str) -> list:
+        return [s.strip() for s in val.split(',') if s.strip()]
+
+    # Trading section – parse CSV env vars and numeric defaults
+    trading = {
+        "universe": csv_to_list(os.getenv('UNIVERSE', '005930,000660,035420,035720')),
+        "us_universe": csv_to_list(os.getenv('US_UNIVERSE', 'AAPL.US,MSFT.US,GOOGL.US')),
+        "max_budget": int(os.getenv('MAX_BUDGET', os.getenv('INVESTMENT_BUDGET', '10000'))),
+        "k_value": float(os.getenv('K_VALUE', '0.4')),
+        "stop_loss": float(os.getenv('STOP_LOSS', '0.015')),
+        "take_profit": float(os.getenv('TAKE_PROFIT', '0.03')),
+        "max_stocks": int(os.getenv('MAX_STOCKS', '1')),
+        "extreme_growth": {
+            "enable": os.getenv('EXTREME_GROWTH_ENABLE', 'true').lower() == 'true',
+            "use_margin_leverage": os.getenv('EXTREME_GROWTH_USE_MARGIN', 'true').lower() == 'true',
+            "smart_order_routing": os.getenv('EXTREME_GROWTH_SMART_ORDER', 'true').lower() == 'true',
+            "micro_scalping_ticks": int(os.getenv('EXTREME_GROWTH_MICRO_SCALPING', '3')),
+            "limit_up_overnight": os.getenv('EXTREME_GROWTH_LIMIT_UP', 'true').lower() == 'true',
+            "kelly_criterion": os.getenv('EXTREME_GROWTH_KELLY', 'true').lower() == 'true',
+        },
+    }
+
+    # Logging configuration (optional overrides via env)
+    logging_cfg = {
+        "level": os.getenv('LOG_LEVEL', 'INFO'),
+        "file": os.getenv('LOG_FILE', 'logs/trading.log'),
+    }
+
+    return {
+        "auth": auth,
+        "trading": trading,
+        "logging": logging_cfg,
+    }
 
 def main():
     config = load_config()
@@ -112,8 +139,16 @@ def main():
                 (now.hour >= 9 and now.hour < 15) or
                 (now.hour == 15 and now.minute <= 20)
             ))
-            # 미국 시장 트레이딩 가능 여부 (평일·공휴일 체크, 시간대 변환 간소화)
-            is_us_trading = (not is_us_holiday and now.weekday() < 5)
+            # 미국 시장 트레이딩 가능 여부 (NY시간 09:30‑16:00 ET, KST와 변환)
+            us_tz = timezone(timedelta(hours=-4))  # EDT (UTC‑4) 현재 시점
+            now_us = datetime.now(us_tz)
+            # 거래시간: 09:30 ≤ now_us < 16:00 (정규장) 및 평일·공휴일 제외
+            is_us_trading = (
+                not is_us_holiday and
+                now_us.weekday() < 5 and
+                (now_us.hour > 9 or (now_us.hour == 9 and now_us.minute >= 30)) and
+                (now_us.hour < 16 or (now_us.hour == 16 and now_us.minute == 0))
+            )
             # 어느 시장도 열려 있지 않다면 자동 매매 일시 정지
             if not (is_kor_trading or is_us_trading):
                 logging.info("📅 오늘은 한국·미국 모두 휴일이거나 거래 시간이 아닙니다. 자동매매를 일시 정지합니다.")
