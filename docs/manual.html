@@ -30,7 +30,7 @@
         <div class="manual-grid">
             <div class="manual-sidebar">
                 <ul>
-                    <li><a href="#config">config.yaml 설정</a></li>
+                    <li><a href="#config">.env 설정</a></li>
                     <li><a href="#running">프로그램 가동</a></li>
                     <li><a href="#dashboard">대시보드 활용</a></li>
                     <li><a href="#faq">자주 묻는 질문</a></li>
@@ -41,14 +41,14 @@
             
             <div class="manual-main">
                 <section id="config">
-                    <h2>1. config.yaml 완벽 마스터</h2>
-                    <p>시스템의 두뇌인 설정 파일을 본인의 스타일에 맞게 튜닝하세요.</p>
+                    <h2>1. .env 완벽 마스터</h2>
+                    <p>시스템의 두뇌인 환경 변수 설정 파일을 본인의 스타일에 맞게 튜닝하세요.</p>
                     <table class="manual-table">
                         <tr><th>항목</th><th>설명</th><th>권장값</th></tr>
-                        <tr><td>max_budget</td><td>자동매매에 사용할 총 예산</td><td>계좌 잔고의 50%</td></tr>
-                        <tr><td>stop_loss</td><td>손절매 기준 (비율)</td><td>0.015 (-1.5%)</td></tr>
-                        <tr><td>k_value</td><td>돌파 민감도 (낮을수록 공격적)</td><td>0.4 ~ 0.6</td></tr>
-                        <tr><td>gemini_api_key</td><td>AI 뉴스 분석용 API 키</td><td>필수</td></tr>
+                        <tr><td>MAX_BUDGET</td><td>자동매매에 사용할 총 예산</td><td>계좌 잔고의 50%</td></tr>
+                        <tr><td>STOP_LOSS</td><td>손절매 기준 (비율)</td><td>0.015 (-1.5%)</td></tr>
+                        <tr><td>K_VALUE</td><td>돌파 민감도 (낮을수록 공격적)</td><td>0.4 ~ 0.6</td></tr>
+                        <tr><td>GEMINI_API_KEY</td><td>AI 뉴스 분석용 API 키</td><td>필수</td></tr>
                     </table>
                 </section>
 
