@@ -199,5 +199,66 @@ if not df.empty:
 else:
     st.warning("아직 거래 내역이 없습니다. 시스템이 거래를 시작하면 대시보드가 활성화됩니다.")
 
+# ---------------------------------------------------
+# System Activity Logs (실시간 시스템 로그)
+# ---------------------------------------------------
+st.divider()
+st.subheader("🤖 System Activity Logs (실시간 시스템 로그)")
+
+def get_recent_logs(log_path="logs/trading.log", num_lines=30):
+    if not os.path.exists(log_path):
+        return ["로그 파일이 존재하지 않습니다."]
+    try:
+        with open(log_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            lines = [line.strip() for line in lines if line.strip()]
+            return lines[-num_lines:]
+    except Exception as e:
+        return [f"로그를 읽는 중 오류가 발생했습니다: {str(e)}"]
+
+def format_logs_to_html(logs):
+    formatted_lines = []
+    # 최신 로그가 위에 오도록 역순 배치
+    for line in reversed(logs):
+        escaped_line = line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        
+        # 레벨별 색상 설정
+        if " - INFO - " in escaped_line:
+            if any(emoji in escaped_line for emoji in ["🔥", "🚀", "🎯", "✅", "⚡", "💎"]):
+                color = "#4fc3f7" # 하늘색 (주요 정보)
+            else:
+                color = "#e0e0e0" # 연한 회색 (일반 정보)
+        elif " - WARNING - " in escaped_line or "⚠️" in escaped_line:
+            color = "#ffb74d" # 주황색 (경고)
+        elif " - ERROR - " in escaped_line or "❌" in escaped_line or "🚨" in escaped_line:
+            color = "#e57373" # 빨간색 (에러)
+        else:
+            color = "#f5f5f5"
+            
+        formatted_lines.append(f'<div style="color: {color}; margin-bottom: 4px; border-bottom: 1px solid #2d2d2d; padding-bottom: 4px; font-family: monospace; font-size: 13px;">{escaped_line}</div>')
+    return "".join(formatted_lines)
+
+log_lines = get_recent_logs()
+formatted_html = format_logs_to_html(log_lines)
+
+log_box_html = f"""
+<div style="
+    background-color: #1e1e1e;
+    padding: 15px;
+    border-radius: 8px;
+    height: 350px;
+    overflow-y: auto;
+    border: 1px solid #333;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+">
+    {formatted_html}
+</div>
+<p style="font-size: 11px; color: #888; margin-top: 5px; text-align: right;">※ 최신 로그가 상단에 표시됩니다. (새로고침 간격: {refresh_rate}초)</p>
+"""
+st.markdown(log_box_html, unsafe_allow_html=True)
+
 # 자동 새로고침 설정 (Streamlit 1.27.0+ 기준)
-# st.rerun() # 실제 사용 시에는 QTimer나 st_autorefresh 등을 활용 권장
+import time
+time.sleep(refresh_rate)
+st.rerun()
+
