@@ -27,6 +27,7 @@ def get_data():
 def get_account_balance():
     try:
         from broker.kis_api import KISBroker
+        import requests
         
         config = {
             'auth': {
@@ -39,13 +40,56 @@ def get_account_balance():
         }
         
         if not config['auth']['kis_app_key'] or not config['auth']['kis_app_secret']:
-            return None
+            return "설정 필요"
             
         broker = KISBroker(config)
-        res = broker.api.fetch_balance()
-        output2 = res.get('output2', [])
-        if output2:
-            return int(output2[0].get('dnca_tot_amt', 0))
+        # Access token 발급/로드 (mojito 내장 로직 활용)
+        broker.api.issue_access_token()
+        token = broker.api.access_token
+        if token and not token.startswith("Bearer "):
+            token = f"Bearer {token}"
+            
+        # KIS API 직접 호출하여 mojito의 tr_cont 버그 및 응답 실패 우회
+        base_url = "https://openapimts.koreainvestment.com:29443" if broker.is_virtual else "https://openapi.koreainvestment.com:9443"
+        url = f"{base_url}/uapi/domestic-stock/v1/trading/inquire-balance"
+        
+        headers = {
+            "content-type": "application/json",
+            "authorization": token,
+            "appkey": broker.app_key,
+            "appsecret": broker.app_secret,
+            "tr_id": "VTTC8401R" if broker.is_virtual else "TTTC8401R",
+        }
+        
+        params = {
+            "CANO": broker.account_no,
+            "ACNT_PRDT_CD": broker.account_suffix,
+            "AFHR_FLG": "N",
+            "OFLG": "",
+            "FNCG_AMT_AUTO_RDPT_YN": "N",
+            "PRCS_DVSN": "01",
+            "UNPR_DVSN": "01",
+            "CTX_AREA_FK100": "",
+            "CTX_AREA_NK100": "",
+        }
+        
+        res = requests.get(url, headers=headers, params=params, timeout=5)
+        if res.status_code == 200:
+            res_data = res.json()
+            if res_data.get('rt_cd') == '0':
+                output2 = res_data.get('output2', [])
+                if output2:
+                    return int(output2[0].get('dnca_tot_amt', 0))
+            else:
+                msg = res_data.get('msg1', '오류')
+                return f"오류 ({msg})"
+        else:
+            try:
+                err_data = res.json()
+                msg = err_data.get('msg1', '서버 에러')
+                return f"에러 ({msg})"
+            except:
+                return f"HTTP {res.status_code}"
         return None
     except Exception as e:
         print(f"Error fetching account balance: {e}")
@@ -104,8 +148,10 @@ current_total = investment_budget + total_profit
 
 # KIS API를 통해 실시간 계좌 예수금 잔액 조회
 balance = get_account_balance()
-if balance is not None:
+if isinstance(balance, int):
     account_balance_str = f"{balance:,}원"
+elif isinstance(balance, str):
+    account_balance_str = balance
 else:
     account_balance_str = "조회 실패"
 
