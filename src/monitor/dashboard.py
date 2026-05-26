@@ -16,7 +16,9 @@ st.set_page_config(page_title="Real-time Dashboard for Stock Quant Trader", layo
 
 def get_data():
     try:
-        conn = sqlite3.connect("data/trading_history.db")
+        is_virtual = os.getenv('KIS_VIRTUAL_TRADING', 'true').lower() == 'true'
+        db_path = "data/trading_history_mock.db" if is_virtual else "data/trading_history_real.db"
+        conn = sqlite3.connect(db_path)
         df = pd.read_sql("SELECT * FROM trades ORDER BY timestamp DESC", conn)
         conn.close()
         return df
@@ -124,6 +126,10 @@ status_bg = "#e8f5e9" if is_kor_trading else "#f5f5f5"
 status_color = "#2e7d32" if is_kor_trading else "#555555"
 is_any_trading = is_kor_trading or is_us_trading
 
+is_virtual = os.getenv('KIS_VIRTUAL_TRADING', 'true').lower() == 'true'
+trading_type_str = "모의" if is_virtual else "실전"
+trading_type_color = "#2e7d32" if is_virtual else "#e53935"
+
 # 사이드바 설정
 st.sidebar.markdown(
     f"""
@@ -144,6 +150,7 @@ st.sidebar.markdown(
 자동매매 상태: {'⚔️ 전투 중' if is_any_trading else '💤 휴식 중'} (한국:{'O' if not is_kor_holiday else 'X'}, 미국:{'O' if not is_us_holiday else 'X'})
 </div>
 <p style="margin: 0 0 5px 0; font-size: 13px;"><strong>KIS Account:</strong> <code>{kis_account_no}-{kis_account_suffix}</code></p>
+<p style="margin: 0 0 5px 0; font-size: 13px;"><strong>투자 운영 종류:</strong> <code style="color: {trading_type_color}; font-weight: bold;">{trading_type_str}</code></p>
 <p style="margin: 0 0 5px 0; font-size: 13px;"><strong>투자 운영 금액:</strong> <code>{investment_budget:,}원</code></p>
 <p style="margin: 0 0 5px 0; font-size: 13px;"><strong>투자 운영 결과:</strong> <code style="color: {'#e53935' if current_total < investment_budget else '#1e88e5' if current_total > investment_budget else '#333'}; font-weight: bold;">{current_total:,}원</code></p>
 <p style="margin: 0 0 15px 0; font-size: 13px;"><strong>증권 계좌 잔액:</strong> <code style="font-weight: bold;">{account_balance_str}</code></p>
@@ -223,8 +230,15 @@ if not df.empty:
         
     with col_right:
         st.subheader("🔥 Profit/Loss Heatmap")
-        fig_heat = px.treemap(df, path=['code'], values='profit', color='profit',
-                             color_continuous_scale='RdYlGn', title='종목별 수익 기여도')
+        # 종목별 누적 수익 계산 (Plotly treemap은 음수나 합계 0일 때 크기 계산 오류 방지 위해 절대값 사용)
+        df_group = df.groupby('code').agg({'profit': 'sum'}).reset_index()
+        df_group['abs_profit'] = df_group['profit'].abs()
+        if df_group['abs_profit'].sum() == 0:
+            df_group['abs_profit'] = 1.0  # ZeroDivisionError 방지
+            
+        fig_heat = px.treemap(df_group, path=['code'], values='abs_profit', color='profit',
+                             color_continuous_scale='RdYlGn', title='종목별 수익 기여도',
+                             hover_data=['profit'])
         st.plotly_chart(fig_heat, use_container_width=True)
 
     # 4. AI 투자 복기 섹션

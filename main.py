@@ -92,7 +92,9 @@ def main():
     
     # 1. 시스템 초기화
     print("🚀 Antigravity Quant Trader (KIS Edition) 시스템 시동 중...")
-    db = TradeDatabase()
+    is_virtual = config['auth']['kis_virtual_trading']
+    db_path = "data/trading_history_mock.db" if is_virtual else "data/trading_history_real.db"
+    db = TradeDatabase(db_path=db_path)
     notifier = SlackNotifier(config['auth']['slack_bot_token'], config['auth']['slack_channel_id'])
     
     # 2. KIS API 브로커 초기화 (Ubuntu 호환)
