@@ -7,6 +7,10 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timezone, timedelta
 import holidays
+from dotenv import load_dotenv
+
+# .env 파일 로드
+load_dotenv()
 
 # sys.path 설정: src 폴더를 포함하여 analytics 등을 임포트 가능하도록 함
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
@@ -246,8 +250,7 @@ if not df.empty:
     st.subheader("🤖 Gemini AI Investment Insights")
     if st.button("AI 매매 복기 생성"):
         from analytics.ai_journal import AITradingJournal
-        # config에서 API 키 로드 로직 필요 (여기선 예시)
-        api_key = st.secrets.get("GEMINI_API_KEY", "") 
+        api_key = os.getenv("GEMINI_API_KEY", "") 
         journal = AITradingJournal(api_key)
         
         with st.spinner("AI가 오늘의 매매를 분석 중입니다..."):
