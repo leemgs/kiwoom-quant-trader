@@ -23,6 +23,34 @@ def get_data():
     except:
         return pd.DataFrame()
 
+@st.cache_data(ttl=5)
+def get_account_balance():
+    try:
+        from broker.kis_api import KISBroker
+        
+        config = {
+            'auth': {
+                "kis_app_key": os.getenv('KIS_APP_KEY', ''),
+                "kis_app_secret": os.getenv('KIS_APP_SECRET', ''),
+                "kis_account_no": os.getenv('KIS_ACCOUNT_NO', ''),
+                "kis_account_suffix": os.getenv('KIS_ACCOUNT_SUFFIX', '01'),
+                "kis_virtual_trading": os.getenv('KIS_VIRTUAL_TRADING', 'true').lower() == 'true',
+            }
+        }
+        
+        if not config['auth']['kis_app_key'] or not config['auth']['kis_app_secret']:
+            return None
+            
+        broker = KISBroker(config)
+        res = broker.api.fetch_balance()
+        output2 = res.get('output2', [])
+        if output2:
+            return int(output2[0].get('dnca_tot_amt', 0))
+        return None
+    except Exception as e:
+        print(f"Error fetching account balance: {e}")
+        return None
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -74,6 +102,13 @@ df = get_data()
 total_profit = df['profit'].sum() if not df.empty else 0
 current_total = investment_budget + total_profit
 
+# KIS API를 통해 실시간 계좌 예수금 잔액 조회
+balance = get_account_balance()
+if balance is not None:
+    account_balance_str = f"{balance:,}원"
+else:
+    account_balance_str = "조회 실패"
+
 # ---------------------------------------------------
 # Sidebar: auto‑trading status with per‑country flags
 # ---------------------------------------------------
@@ -102,7 +137,8 @@ st.sidebar.markdown(
 </div>
 <p style="margin: 0 0 5px 0; font-size: 13px;"><strong>KIS Account:</strong> <code>{kis_account_no}-{kis_account_suffix}</code></p>
 <p style="margin: 0 0 5px 0; font-size: 13px;"><strong>투자 운영 금액:</strong> <code>{investment_budget:,}원</code></p>
-<p style="margin: 0 0 15px 0; font-size: 13px;"><strong>투자 운영 결과:</strong> <code style="color: {'#e53935' if current_total < investment_budget else '#1e88e5' if current_total > investment_budget else '#333'}; font-weight: bold;">{current_total:,}원</code></p>
+<p style="margin: 0 0 5px 0; font-size: 13px;"><strong>투자 운영 결과:</strong> <code style="color: {'#e53935' if current_total < investment_budget else '#1e88e5' if current_total > investment_budget else '#333'}; font-weight: bold;">{current_total:,}원</code></p>
+<p style="margin: 0 0 15px 0; font-size: 13px;"><strong>증권 계좌 잔액:</strong> <code style="font-weight: bold;">{account_balance_str}</code></p>
 </div>
 """,
     unsafe_allow_html=True
