@@ -8,13 +8,15 @@ class ExtremeGrowthStrategy(BaseStrategy):
     """
     1만원 -> 10만원 (1,000% 수익) 달성을 위한 극단적 초단기/고위험 스캘핑 전략
     """
-    def __init__(self, broker, universe, config):
+    def __init__(self, broker, universe, config, db=None):
         super().__init__(broker)
         self.universe = universe
         self.config = config.get('trading', {}).get('extreme_growth', {})
         self.stop_loss = config.get('trading', {}).get('stop_loss', 0.015)
+        self.db = db
+        self.positions = {} # 현재 보유 포지션 관리
         
-        initial_capital = config.get('trading', {}).get('max_budget', 10000)
+        initial_capital = config.get('trading', {}).get('max_trading_limit', 10000)
         self.initial_capital = initial_capital
         self.leverage_manager = DynamicLeverageManager(initial_capital=initial_capital)
         
@@ -69,6 +71,56 @@ class ExtremeGrowthStrategy(BaseStrategy):
             return True
         return False
 
+    def monitor_position(self, code):
+        """보유 포지션 실시간 익절/손절 감시 (Mock 시뮬레이션)"""
+        if code not in self.positions:
+            return
+            
+        pos = self.positions[code]
+        buy_price = pos['buy_price']
+        qty = pos['qty']
+        
+        # 실시간 가격 시뮬레이션 (Mock 가격 변동: 70% 확률로 익절 상승, 30% 확률로 손절 하락)
+        import random
+        price_change_pct = random.choice([0.035, 0.04, -0.02, 0.01, 0.03, -0.01])
+        current_price = int(buy_price * (1 + price_change_pct))
+        
+        # 익절/손절 기준 설정
+        take_profit_price = buy_price * (1 + 0.03) # 3% 익절
+        stop_loss_price = buy_price * (1 - self.stop_loss) # 1.5% 손절
+        
+        if current_price >= take_profit_price:
+            profit = (current_price - buy_price) * qty
+            self.sell_position(code, current_price, profit, reason="익절 (Take Profit)")
+        elif current_price <= stop_loss_price:
+            profit = (current_price - buy_price) * qty
+            self.sell_position(code, current_price, profit, reason="손절 (Stop Loss)")
+        elif time.time() - pos['buy_time'] > 15: # 15초 지나면 청산 (타임아웃)
+            profit = (current_price - buy_price) * qty
+            self.sell_position(code, current_price, profit, reason="시간 경과 청산")
+
+    def sell_position(self, code, current_price=50000, profit=0, reason=""):
+        if code not in self.positions:
+            return
+            
+        pos = self.positions[code]
+        qty = pos['qty']
+        
+        logging.info(f"⚖️ [포지션 청산] {code} 매도 진행 ({reason}): 매도가 {current_price}원, 손익 {profit:+,}원")
+        # 실제 매도 주문 전송
+        self.broker.send_sell_order(code, qty, current_price, order_type="01")
+        
+        # DB에 매도 기록
+        if self.db:
+            self.db.log_trade(code, "SELL", qty, current_price, profit=profit)
+            
+        # 레버리지 매니저 피드백 반영
+        profit_pct = profit / (pos['buy_price'] * qty)
+        self.leverage_manager.update_trade_result(is_win=(profit > 0), profit_pct=profit_pct)
+        
+        # 포지션 삭제
+        del self.positions[code]
+
     def run(self):
         logging.info("🚀 [Extreme Growth 1,000% 목표 모드] 엔진 가동. 미수 풀레버리지/스캘핑 시스템 시작.")
         
@@ -80,11 +132,22 @@ class ExtremeGrowthStrategy(BaseStrategy):
                 if not getattr(self, 'liquidation_triggered', False):
                     logging.warning("⚠️ [리스크 관리] 장 마감 임박. 미수 동결을 막기 위해 전 종목 강제 청산 (상한가 오버나잇 예외 제외)")
                     self.liquidation_triggered = True
+                    # 보유한 모든 포지션 강제 청산
+                    for code in list(self.positions.keys()):
+                        self.sell_position(code, reason="장 마감 강제 청산")
                 pass
             else:
                 self.liquidation_triggered = False
 
+            # 보유 포지션 실시간 익절/손절 감시
+            for code in list(self.positions.keys()):
+                self.monitor_position(code)
+
             for code in self.universe:
+                # 이미 보유한 종목은 스킵
+                if code in self.positions:
+                    continue
+                    
                 # API를 통해 실시간 호가 및 현재가 수신 (Mock)
                 current_price = 50000
                 limit_up_price = 65000
@@ -98,22 +161,51 @@ class ExtremeGrowthStrategy(BaseStrategy):
                 is_breakout = self.analyze_micro_scalping_orderbook(code, orderbook_data)
 
                 if news_target == code or is_breakout:
-                    if not hasattr(self, 'mock_orders_placed'):
-                        self.mock_orders_placed = set()
+                    # 4. 실현 손익 및 보유 종목의 원금을 반영한 자금 할당
+                    total_profit = self.db.get_total_profit() if self.db else 0.0
+                    total_allowed_capital = max(0.0, self.initial_capital + total_profit)
+                    
+                    # DB 기반으로 열린 포지션들의 매수 원금을 계산
+                    open_positions_cost = self.db.get_open_positions_cost() if self.db else sum(
+                        pos['qty'] * pos['buy_price'] for pos in self.positions.values()
+                    )
+                    # 남은 가용 원금 = 허용 총 자본 - 현재 보유 종목 매수 원금
+                    available_capital = max(0.0, total_allowed_capital - open_positions_cost)
+
+                    # 켈리 공식 및 미수 레버리지 자금 할당 (총 한도를 기준으로 베팅 비율 산출)
+                    budget = self.leverage_manager.get_optimal_budget(
+                        current_account_balance=total_allowed_capital, 
+                        use_margin=self.config.get('use_margin_leverage', True)
+                    )
+                    
+                    # 실제 가용 원금(레버리지 고려)을 초과할 수 없도록 한도 적용
+                    max_allowed_budget = available_capital
+                    if self.config.get('use_margin_leverage', True) and self.leverage_manager.calculate_kelly_fraction() > 0.3:
+                        max_allowed_budget = available_capital * self.leverage_manager.max_margin_rate
                         
-                    if code not in self.mock_orders_placed:
-                        # 4. 켈리 공식 및 미수 레버리지 자금 할당
-                        budget = self.leverage_manager.get_optimal_budget(
-                            current_account_balance=self.initial_capital, 
-                            use_margin=self.config.get('use_margin_leverage', True)
-                        )
-                        target_qty = int(budget / current_price)
+                    budget = min(budget, max_allowed_budget)
+                    target_qty = int(budget / current_price)
+                    
+                    if target_qty > 0:
+                        logging.info(f"💰 [자금관리] 켈리 베팅 기반 풀레버리지 진입: 목표 예산 {budget:,.0f}원 (수량: {target_qty}주, 잔여 가용 원금: {available_capital:,.0f}원)")
+                        # 5. 스마트 지정가 매수 라우팅
+                        self.smart_order_routing(code, target_qty, "BUY", current_price, orderbook_data)
                         
-                        if target_qty > 0:
-                            logging.info(f"💰 [자금관리] 켈리 베팅 기반 풀레버리지 진입: 목표 예산 {budget}원 (수량: {target_qty}주)")
-                            # 5. 스마트 지정가 매수 라우팅
-                            self.smart_order_routing(code, target_qty, "BUY", current_price, orderbook_data)
-                            self.mock_orders_placed.add(code)
+                        # 포지션 등록 및 DB 기록
+                        self.positions[code] = {
+                            'qty': target_qty,
+                            'buy_price': current_price,
+                            'buy_time': time.time()
+                        }
+                        if self.db:
+                            self.db.log_trade(code, "BUY", target_qty, current_price, profit=0)
+                    else:
+                        # 예산 부족 로그 (최초 1회만 출력되도록 처리)
+                        if not hasattr(self, 'insufficient_budget_logged'):
+                            self.insufficient_budget_logged = set()
+                        if code not in self.insufficient_budget_logged:
+                            logging.warning(f"⚠️ [자금관리] 예산 부족으로 {code} 주문 불가 (현재가: {current_price}원, 가용 예산: {budget:,.0f}원, 잔여 가용 원금: {available_capital:,.0f}원). '.env' 파일의 INVESTMENT_BUDGET을 늘려주세요.")
+                            self.insufficient_budget_logged.add(code)
 
                 # 6. 상한가 오버나잇 결정
                 if self.decide_limit_up_overnight(code, current_price, limit_up_price, orderbook_data):

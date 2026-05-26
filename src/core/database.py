@@ -35,3 +35,53 @@ class TradeDatabase:
     def get_all_trades(self):
         with sqlite3.connect(self.db_path) as conn:
             return pd.read_sql("SELECT * FROM trades", conn)
+
+    def get_total_profit(self):
+        """누적 실현 손익의 합계를 반환"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT SUM(profit) FROM trades WHERE type = 'SELL'")
+                row = cursor.fetchone()
+                return float(row[0]) if row and row[0] is not None else 0.0
+        except Exception as e:
+            print(f"Error fetching total profit: {e}")
+            return 0.0
+
+    def get_open_positions_cost(self):
+        """현재 보유 중인 포지션의 매수 원금 합계를 계산하여 반환"""
+        try:
+            df = self.get_all_trades()
+            if df.empty:
+                return 0.0
+            
+            holdings = {}
+            # 시간 순으로 정렬하여 거래 이력을 추적
+            df_sorted = df.copy()
+            df_sorted['timestamp'] = pd.to_datetime(df_sorted['timestamp'])
+            df_sorted = df_sorted.sort_values('timestamp')
+            
+            for _, row in df_sorted.iterrows():
+                code = row['code']
+                trade_type = row['type']
+                qty = int(row['qty'])
+                price = float(row['price'])
+                
+                if code not in holdings:
+                    holdings[code] = {'qty': 0, 'total_cost': 0.0}
+                
+                if trade_type == 'BUY':
+                    holdings[code]['qty'] += qty
+                    holdings[code]['total_cost'] += qty * price
+                elif trade_type == 'SELL':
+                    if holdings[code]['qty'] > 0:
+                        avg_price = holdings[code]['total_cost'] / holdings[code]['qty']
+                        holdings[code]['qty'] = max(0, holdings[code]['qty'] - qty)
+                        holdings[code]['total_cost'] = holdings[code]['qty'] * avg_price
+                        
+            total_open_cost = sum(h['total_cost'] for h in holdings.values())
+            return total_open_cost
+        except Exception as e:
+            print(f"Error calculating open positions cost: {e}")
+            return 0.0
+

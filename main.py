@@ -60,7 +60,7 @@ def load_config() -> dict:
     trading = {
         "universe": csv_to_list(os.getenv('UNIVERSE', '005930,000660,035420,035720')),
         "us_universe": csv_to_list(os.getenv('US_UNIVERSE', 'AAPL.US,MSFT.US,GOOGL.US')),
-        "max_budget": int(os.getenv('MAX_BUDGET', os.getenv('INVESTMENT_BUDGET', '10000'))),
+        "max_trading_limit": int(os.getenv('MAX_TRADING_LIMIT', os.getenv('INVESTMENT_BUDGET', '10000'))),
         "k_value": float(os.getenv('K_VALUE', '0.4')),
         "stop_loss": float(os.getenv('STOP_LOSS', '0.015')),
         "take_profit": float(os.getenv('TAKE_PROFIT', '0.03')),
@@ -105,7 +105,7 @@ def main():
     # ⚡ 1,000% 달성을 위한 Extreme Growth 모드 확인
     if config.get('trading', {}).get('extreme_growth', {}).get('enable', False):
         print("⚡ [Extreme Growth] 1만원 -> 10만원 (1,000%) 달성 특화 모드로 진입합니다!")
-        extreme_strategy = ExtremeGrowthStrategy(broker, universe, config)
+        extreme_strategy = ExtremeGrowthStrategy(broker, universe, config, db=db)
         extreme_strategy.run()
         return # 해당 모드는 자체 무한 루프를 가지므로 메인 함수 종료
         
@@ -117,7 +117,7 @@ def main():
     ensemble = EnsembleEngine(strategies)
     
     # 4. 리스크 매니저 초기화
-    risk_manager = MarketRiskManager(MacroCollector(), max_budget=config['trading']['max_budget'])
+    risk_manager = MarketRiskManager(MacroCollector(), max_trading_limit=config['trading']['max_trading_limit'], db=db)
     
     # 5. 자동매매 메인 루프
     print("🔍 실시간 시장 감시 모드 진입 (Ubuntu Environment)")
@@ -170,7 +170,7 @@ def main():
                     if ensemble.get_signals(code, df):
                         print(f"🎯 [{code}] 매수 조건 충족! 현재가: {price}")
                         # 주문 로직 (주석 처리)
-                        # qty = int((config['trading']['max_budget'] * multiplier) / price)
+                        # qty = int((config['trading']['max_trading_limit'] * multiplier) / price)
                         # broker.send_order(code, qty, price, order_type="01")
                         # db.log_trade(...)
                         # notifier.notify_order(...)
