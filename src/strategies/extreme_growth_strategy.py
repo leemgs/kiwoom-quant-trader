@@ -16,8 +16,9 @@ class ExtremeGrowthStrategy(BaseStrategy):
         self.db = db
         self.positions = {} # 현재 보유 포지션 관리
         
-        initial_capital = config.get('trading', {}).get('max_trading_limit', 10000)
+        initial_capital = config.get('trading', {}).get('investment_budget', 10000)
         self.initial_capital = initial_capital
+        self.max_trading_limit = config.get('trading', {}).get('max_trading_limit', 100000)
         self.leverage_manager = DynamicLeverageManager(initial_capital=initial_capital)
         
     def check_signal(self, code, df):
@@ -161,9 +162,10 @@ class ExtremeGrowthStrategy(BaseStrategy):
                 is_breakout = self.analyze_micro_scalping_orderbook(code, orderbook_data)
 
                 if news_target == code or is_breakout:
-                    # 4. 실현 손익 및 보유 종목의 원금을 반영한 자금 할당
                     total_profit = self.db.get_total_profit() if self.db else 0.0
-                    total_allowed_capital = max(0.0, self.initial_capital + total_profit)
+                    total_allowed_capital = self.initial_capital + total_profit
+                    if self.max_trading_limit is not None:
+                        total_allowed_capital = min(total_allowed_capital, self.max_trading_limit)
                     
                     # DB 기반으로 열린 포지션들의 매수 원금을 계산
                     open_positions_cost = self.db.get_open_positions_cost() if self.db else sum(

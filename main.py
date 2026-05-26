@@ -60,7 +60,8 @@ def load_config() -> dict:
     trading = {
         "universe": csv_to_list(os.getenv('UNIVERSE', '005930,000660,035420,035720')),
         "us_universe": csv_to_list(os.getenv('US_UNIVERSE', 'AAPL.US,MSFT.US,GOOGL.US')),
-        "max_trading_limit": int(os.getenv('MAX_TRADING_LIMIT', os.getenv('INVESTMENT_BUDGET', '10000'))),
+        "investment_budget": int(os.getenv('INVESTMENT_BUDGET', '10000')),
+        "max_trading_limit": int(os.getenv('MAX_TRADING_LIMIT', '100000')),
         "k_value": float(os.getenv('K_VALUE', '0.4')),
         "stop_loss": float(os.getenv('STOP_LOSS', '0.015')),
         "take_profit": float(os.getenv('TAKE_PROFIT', '0.03')),
@@ -119,7 +120,12 @@ def main():
     ensemble = EnsembleEngine(strategies)
     
     # 4. 리스크 매니저 초기화
-    risk_manager = MarketRiskManager(MacroCollector(), max_trading_limit=config['trading']['max_trading_limit'], db=db)
+    risk_manager = MarketRiskManager(
+        MacroCollector(),
+        investment_budget=config['trading']['investment_budget'],
+        max_trading_limit=config['trading']['max_trading_limit'],
+        db=db
+    )
     
     # 5. 자동매매 메인 루프
     print("🔍 실시간 시장 감시 모드 진입 (Ubuntu Environment)")

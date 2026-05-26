@@ -1,6 +1,7 @@
 class MarketRiskManager:
-    def __init__(self, macro_collector, max_trading_limit=None, db=None):
+    def __init__(self, macro_collector, investment_budget=10000, max_trading_limit=100000, db=None):
         self.collector = macro_collector
+        self.investment_budget = investment_budget
         self.max_trading_limit = max_trading_limit
         self.db = db
         self.risk_score = 0 # 0(안전) ~ 100(위험)
@@ -27,13 +28,16 @@ class MarketRiskManager:
         """리스크 점수 및 투자 한도에 따른 매매 비중 반환"""
         self.calculate_risk_index()
         
-        # 1. 투자 한도(max_trading_limit) 체크 (실현 손익을 반영한 동적 한도 계산)
-        allowed_limit = self.max_trading_limit
+        # 1. 투자 한도 체크: INVESTMENT_BUDGET + total_profit (단, max_trading_limit을 초과할 수 없음)
+        allowed_limit = self.investment_budget
         if self.db:
             total_profit = self.db.get_total_profit()
-            allowed_limit = max(0.0, self.max_trading_limit + total_profit)
+            allowed_limit = self.investment_budget + total_profit
             
-        if allowed_limit and current_investment >= allowed_limit:
+        if self.max_trading_limit is not None:
+            allowed_limit = min(allowed_limit, self.max_trading_limit)
+            
+        if current_investment >= allowed_limit:
             print(f"🛑 [RiskManager] 설정된 투자 한도({allowed_limit:,.0f}원) 초과 (현재 투자액: {current_investment:,.0f}원). 매매를 중단합니다.")
             return 0.0
 
