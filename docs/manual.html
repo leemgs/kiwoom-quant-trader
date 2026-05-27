@@ -75,11 +75,13 @@
 
                 <section id="dashboard">
                     <h2>3. 실시간 대시보드 활용</h2>
-                    <p><code>streamlit run src/monitor/dashboard.py</code> 명령어로 웹 대시보드를 켭니다.</p>
+                    <p><code>streamlit run src/monitor/dashboard.py</code> 명령어로 웹 대시보드를 켭니다. (Docker 가동 시 자동으로 8501 포트에서 서비스됩니다.)</p>
                     <ul>
                         <li><strong>Equity Curve</strong>: 자산의 우상향 여부를 체크하세요.</li>
                         <li><strong>Heatmap</strong>: 오늘 어떤 종목이 효자 종목인지 시각적으로 확인하세요.</li>
                         <li><strong>AI Review</strong>: 장 종료 후 AI가 분석한 오늘의 매매 복기를 정독하세요.</li>
+                        <li><strong>실시간 계좌 연동</strong>: 실전 모드 가동 시 가상 시뮬레이션 성과가 배제되며, 증권사 실제 총자산과 원금의 차액(실제 손익)만 정밀 노출합니다.</li>
+                        <li><strong>실전 손익 초기화</strong>: 대시보드 좌측 메뉴 하단의 <code>실전 손익 초기화 🔄</code> 버튼을 클릭하면, 현재 시점의 실제 총자산을 새로운 기준으로 잡아 누적 실현손익을 즉시 0원으로 리셋합니다. 기준 정보는 <code>data/profit_baseline.txt</code> 파일에 영구 기록되어 보존됩니다.</li>
                     </ul>
                 </section>
 
