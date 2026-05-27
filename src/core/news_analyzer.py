@@ -8,7 +8,7 @@ class NewsSentimentAnalyzer:
         self.api_key = api_key
         if api_key:
             genai.configure(api_key=api_key)
-            self.model = genai.GenerativeModel('gemini-pro')
+            self.model = genai.GenerativeModel('gemini-1.5-flash')
         self.enabled = True if api_key else False
 
     def get_latest_news(self, code):

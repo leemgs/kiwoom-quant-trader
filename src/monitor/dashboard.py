@@ -222,7 +222,12 @@ if not df.empty:
     df = df.sort_values('timestamp')
     df['cum_profit'] = df['profit'].cumsum()
     
-    fig_curve = px.line(df, x='timestamp', y='cum_profit', title='누적 수익률 추이')
+    # pandas Timestamp subclass can trigger RecursionError in Plotly on Python 3.9.
+    # We convert to string format for plotting to bypass the typing check safely.
+    plot_df = df.copy()
+    plot_df['timestamp'] = plot_df['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
+    
+    fig_curve = px.line(plot_df, x='timestamp', y='cum_profit', title='누적 수익률 추이')
     st.plotly_chart(fig_curve, use_container_width=True)
 
     # 3. 현재 보유 종목 및 매매 히스토리
