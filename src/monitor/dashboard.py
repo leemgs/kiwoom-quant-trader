@@ -215,14 +215,41 @@ if not is_virtual:
 # ---------------------------------------------------
 # Expander for trading‑hours with holiday info and info icon
 # ---------------------------------------------------
-expander_title = f"⏰ {today.strftime('%m/%d')} (한국:{'휴일' if is_kor_holiday else '평일'}, 미국:{'휴일' if is_us_holiday else '평일'}) ℹ️"
+expander_title = f"⏰ {now.strftime('%Y-%m-%d %H:%M')} (한국:{'휴일' if is_kor_holiday else '평일'}, 미국:{'휴일' if is_us_holiday else '평일'}) ℹ️"
 with st.sidebar.expander(expander_title):
     st.markdown("""
-    - **운영 요일**: 월 ~ 금 (공휴일 제외)
-    - **개장 준비**: 08:50 ~ 09:00
-    - **자동 매매**: 09:00 ~ 15:15
-    - **강제 청산**: 15:15 (미수 방지)
-    """)
+<table style="width: 100%; border-collapse: collapse; font-size: 11.5px; margin-top: 5px; border: 1px solid #e0e0e0; border-radius: 6px;">
+  <thead>
+    <tr style="border-bottom: 2px solid #e0e0e0; background-color: #f8f9fa;">
+      <th style="text-align: left; padding: 6px; font-weight: bold; color: #333;">구분</th>
+      <th style="text-align: center; padding: 6px; font-weight: bold; color: #03256C;">한국</th>
+      <th style="text-align: center; padding: 6px; font-weight: bold; color: #a53535;">미국</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr style="border-bottom: 1px solid #eee;">
+      <td style="padding: 6px; font-weight: bold; color: #555; background-color: #fafafa;">운영 요일</td>
+      <td style="text-align: center; padding: 6px; color: #333;">월 ~ 금<br><span style="font-size:9.5px; color:#888;">(공휴일 제외)</span></td>
+      <td style="text-align: center; padding: 6px; color: #333;">월 ~ 금<br><span style="font-size:9.5px; color:#888;">(공휴일 제외)</span></td>
+    </tr>
+    <tr style="border-bottom: 1px solid #eee;">
+      <td style="padding: 6px; font-weight: bold; color: #555; background-color: #fafafa;">개장 준비</td>
+      <td style="text-align: center; padding: 6px; color: #333;">08:50 ~ 09:00</td>
+      <td style="text-align: center; padding: 6px; color: #333;">22:30 ~ 23:30</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #eee;">
+      <td style="padding: 6px; font-weight: bold; color: #555; background-color: #fafafa;">자동 매매</td>
+      <td style="text-align: center; padding: 6px; color: #2e7d32; font-weight: bold;">09:00 ~ 15:15</td>
+      <td style="text-align: center; padding: 6px; color: #c62828; font-weight: bold;">23:30 ~ 05:00</td>
+    </tr>
+    <tr>
+      <td style="padding: 6px; font-weight: bold; color: #555; background-color: #fafafa;">강제 청산</td>
+      <td style="text-align: center; padding: 6px; color: #e53935; font-weight: bold;">15:15<br><span style="font-size:9.5px; font-weight:normal; color:#e53935;">(미수 방지)</span></td>
+      <td style="text-align: center; padding: 6px; color: #777;">-</td>
+    </tr>
+  </tbody>
+</table>
+""", unsafe_allow_html=True)
 
 refresh_rate = st.sidebar.slider("새로고침 간격(초)", 5, 60, 10)
 
