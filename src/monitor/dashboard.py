@@ -48,13 +48,17 @@ def get_account_balance():
             return "설정 필요"
             
         broker = KISBroker(config)
-        # 직접 mojito의 fetch_balance 호출 (init 시 token.dat 캐시 자동 로드됨)
         res = broker.api.fetch_balance()
         
         if isinstance(res, dict) and ('output2' in res or res.get('rt_cd') == '0'):
             output2 = res.get('output2', [])
             if output2:
-                return int(output2[0].get('dnca_tot_amt', 0))
+                cash = int(output2[0].get('dnca_tot_amt', 0))
+                total_assets = int(output2[0].get('tot_evlu_amt', cash))
+                return {
+                    'cash': cash,
+                    'total_assets': total_assets
+                }
         else:
             msg = res.get('msg1', '조회 실패') if isinstance(res, dict) else '응답 오류'
             return f"오류 ({msg})"
@@ -114,14 +118,22 @@ df = get_data()
 total_profit = df['profit'].sum() if not df.empty else 0
 current_total = investment_budget + total_profit
 
-# KIS API를 통해 실시간 계좌 예수금 잔액 조회
-balance = get_account_balance()
-if isinstance(balance, int):
-    account_balance_str = f"{balance:,}원"
-elif isinstance(balance, str):
-    account_balance_str = balance
+# KIS API를 통해 실시간 계좌 예수금 및 총자산 조회
+balance_info = get_account_balance()
+real_total_assets = investment_budget
+real_cash = 0
+account_balance_str = "조회 실패"
+
+if isinstance(balance_info, dict):
+    real_cash = balance_info['cash']
+    real_total_assets = balance_info['total_assets']
+    account_balance_str = f"{real_cash:,}원"
+elif isinstance(balance_info, str):
+    account_balance_str = balance_info
+    real_total_assets = current_total
 else:
     account_balance_str = "조회 실패"
+    real_total_assets = current_total
 
 # ---------------------------------------------------
 # Sidebar: auto‑trading status with per‑country flags
@@ -155,9 +167,10 @@ st.sidebar.markdown(
 </div>
 <p style="margin: 0 0 5px 0; font-size: 13px;"><strong>KIS Account:</strong> <code>{kis_account_no}-{kis_account_suffix}</code></p>
 <p style="margin: 0 0 5px 0; font-size: 13px;"><strong>투자 운영 종류:</strong> <code style="color: {trading_type_color}; font-weight: bold;">{trading_type_str}</code></p>
-<p style="margin: 0 0 5px 0; font-size: 13px;"><strong>투자 운영 금액:</strong> <code>{investment_budget:,}원</code></p>
-<p style="margin: 0 0 5px 0; font-size: 13px;"><strong>투자 운영 결과:</strong> <code style="color: {'#e53935' if current_total < investment_budget else '#1e88e5' if current_total > investment_budget else '#333'}; font-weight: bold;">{current_total:,}원</code></p>
-<p style="margin: 0 0 15px 0; font-size: 13px;"><strong>증권 계좌 잔액:</strong> <code style="font-weight: bold;">{account_balance_str}</code></p>
+<p style="margin: 0 0 5px 0; font-size: 13px;"><strong>투자 운영 금액 (원금):</strong> <code>{investment_budget:,}원</code></p>
+<p style="margin: 0 0 5px 0; font-size: 13px;"><strong>투자 운영 결과 (실제 총자산):</strong> <code style="color: {'#e53935' if real_total_assets < investment_budget else '#2e7d32' if real_total_assets > investment_budget else '#333'}; font-weight: bold;">{real_total_assets:,}원</code></p>
+<p style="margin: 0 0 5px 0; font-size: 13px;"><strong>증권 계좌 예수금 (현금):</strong> <code style="font-weight: bold;">{account_balance_str}</code></p>
+<p style="margin: 0 0 15px 0; font-size: 13px;"><strong>시스템 누적 실현손익 (이론):</strong> <code style="color: {'#e53935' if total_profit < 0 else '#2e7d32' if total_profit > 0 else '#333'}; font-weight: bold;">{total_profit:+,}원</code></p>
 </div>
 """,
     unsafe_allow_html=True
