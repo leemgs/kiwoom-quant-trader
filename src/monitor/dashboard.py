@@ -113,6 +113,8 @@ is_us_trading = (
     (now_us.hour < 16 or (now_us.hour == 16 and now_us.minute == 0))
 )
 
+is_virtual = os.getenv('KIS_VIRTUAL_TRADING', 'true').lower() == 'true'
+
 # 데이터 로드 및 현재 자산 계산
 df = get_data()
 total_profit = df['profit'].sum() if not df.empty else 0
@@ -135,6 +137,14 @@ else:
     account_balance_str = "조회 실패"
     real_total_assets = current_total
 
+# 실현손익 계산: 모의 투자면 DB 기록을 그대로 표기하고, 실전 투자면 실제 자산 증감액(실제 총자산 - 원금)만 산출
+if is_virtual:
+    system_profit = total_profit
+    system_profit_label = "시스템 누적 실현손익 (모의)"
+else:
+    system_profit = real_total_assets - investment_budget
+    system_profit_label = "시스템 누적 실현손익 (실전)"
+
 # ---------------------------------------------------
 # Sidebar: auto‑trading status with per‑country flags
 # ---------------------------------------------------
@@ -142,7 +152,6 @@ status_bg = "#e8f5e9" if is_kor_trading else "#f5f5f5"
 status_color = "#2e7d32" if is_kor_trading else "#555555"
 is_any_trading = is_kor_trading or is_us_trading
 
-is_virtual = os.getenv('KIS_VIRTUAL_TRADING', 'true').lower() == 'true'
 trading_type_str = "모의" if is_virtual else "실전"
 trading_type_color = "#2e7d32" if is_virtual else "#e53935"
 
@@ -170,7 +179,7 @@ st.sidebar.markdown(
 <p style="margin: 0 0 5px 0; font-size: 13px;"><strong>투자 운영 금액 (원금):</strong> <code>{investment_budget:,}원</code></p>
 <p style="margin: 0 0 5px 0; font-size: 13px;"><strong>투자 운영 결과 (실제 총자산):</strong> <code style="color: {'#e53935' if real_total_assets < investment_budget else '#2e7d32' if real_total_assets > investment_budget else '#333'}; font-weight: bold;">{real_total_assets:,}원</code></p>
 <p style="margin: 0 0 5px 0; font-size: 13px;"><strong>증권 계좌 예수금 (현금):</strong> <code style="font-weight: bold;">{account_balance_str}</code></p>
-<p style="margin: 0 0 15px 0; font-size: 13px;"><strong>시스템 누적 실현손익 (이론):</strong> <code style="color: {'#e53935' if total_profit < 0 else '#2e7d32' if total_profit > 0 else '#333'}; font-weight: bold;">{total_profit:+,}원</code></p>
+<p style="margin: 0 0 15px 0; font-size: 13px;"><strong>{system_profit_label}:</strong> <code style="color: {'#e53935' if system_profit < 0 else '#2e7d32' if system_profit > 0 else '#333'}; font-weight: bold;">{system_profit:+,}원</code></p>
 </div>
 """,
     unsafe_allow_html=True
