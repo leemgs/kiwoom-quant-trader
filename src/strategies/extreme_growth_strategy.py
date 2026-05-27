@@ -6,7 +6,7 @@ from core.leverage_manager import DynamicLeverageManager
 
 class ExtremeGrowthStrategy(BaseStrategy):
     """
-    1만원 -> 10만원 (1,000% 수익) 달성을 위한 극단적 초단기/고위험 스캘핑 전략
+    지정된 자본금으로 지정된 기간 동안 목표 수익을 달성하기 위한 극단적 초단기/고위험 스캘핑 전략
     """
     def __init__(self, broker, universe, config, db=None):
         super().__init__(broker)

@@ -107,7 +107,10 @@ def main():
     
     # ⚡ 1,000% 달성을 위한 Extreme Growth 모드 확인
     if config.get('trading', {}).get('extreme_growth', {}).get('enable', False):
-        print("⚡ [Extreme Growth] 1만원 -> 10만원 (1,000%) 달성 특화 모드로 진입합니다!")
+        budget = config.get('trading', {}).get('investment_budget', 20000)
+        period = int(os.getenv('INVESTMENT_PERIOD_MONTH', '1'))
+        goal = float(os.getenv('INVESTMENT_INCOME_GOAL', '100000'))
+        print(f"⚡ [Extreme Growth] {budget:,}원으로 {period}개월 운영 후 {goal:,}원의 수익을 목표로 하는 특화 모드로 진입합니다!")
         extreme_strategy = ExtremeGrowthStrategy(broker, universe, config, db=db)
         extreme_strategy.run()
         return # 해당 모드는 자체 무한 루프를 가지므로 메인 함수 종료

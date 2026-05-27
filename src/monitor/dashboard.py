@@ -192,9 +192,11 @@ st.sidebar.markdown(
 # 메인 타이틀
 st.markdown("<h2 style='font-size: 28px; font-weight: bold; margin-bottom: 20px;'>🚀 Real-time Dashboard for Stock Quant Trader</h2>", unsafe_allow_html=True)
 
-# 목표 설정 (초기 자본금 -> 1,000% 수익 도전)
+# 목표 설정 (환경 변수 동적 반영)
 INITIAL_SEED = investment_budget
-TARGET_GOAL = INITIAL_SEED * 10
+INVESTMENT_PERIOD_MONTH = int(os.getenv('INVESTMENT_PERIOD_MONTH', '1'))
+INVESTMENT_INCOME_GOAL = float(os.getenv('INVESTMENT_INCOME_GOAL', '100000'))
+TARGET_GOAL = INVESTMENT_INCOME_GOAL
 
 if not df.empty:
     # 1. 상단 메트릭 (총 수익, 승률 등)
@@ -210,9 +212,9 @@ if not df.empty:
 
     # 1.5 챌린지 현황판
     st.divider()
-    st.subheader(f"🎯 1,000% 수익 도전 ({INITIAL_SEED:,}원 → {TARGET_GOAL:,}원)")
+    st.subheader(f"🎯 {INVESTMENT_PERIOD_MONTH}개월 수익 도전 ({INITIAL_SEED:,}원 → {TARGET_GOAL:,}원)")
     current_total = INITIAL_SEED + total_profit
-    progress = min(1.0, current_total / TARGET_GOAL)
+    progress = min(1.0, max(0.0, current_total / TARGET_GOAL))
     st.progress(progress)
     st.write(f"현재 총 자산: **{current_total:,.0f}원** / 목표 자산: **{TARGET_GOAL:,.0f}원**")
 
