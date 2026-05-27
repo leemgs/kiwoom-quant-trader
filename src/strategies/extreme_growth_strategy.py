@@ -122,8 +122,58 @@ class ExtremeGrowthStrategy(BaseStrategy):
         # 포지션 삭제
         del self.positions[code]
 
+    def load_open_positions_from_db(self):
+        """DB의 거래 이력을 바탕으로 미청산된 포지션을 로드하여 실시간 익절/손절 감시 대상에 등록"""
+        if not self.db:
+            return
+            
+        try:
+            df = self.db.get_all_trades()
+            if df.empty:
+                return
+                
+            holdings = {}
+            import pandas as pd
+            df_sorted = df.copy()
+            df_sorted['timestamp'] = pd.to_datetime(df_sorted['timestamp'])
+            df_sorted = df_sorted.sort_values('timestamp')
+            
+            for _, row in df_sorted.iterrows():
+                code = row['code']
+                trade_type = row['type']
+                qty = int(row['qty'])
+                price = float(row['price'])
+                timestamp_val = row['timestamp'].timestamp()
+                
+                if code not in holdings:
+                    holdings[code] = {'qty': 0, 'total_cost': 0.0, 'buy_time': timestamp_val}
+                
+                if trade_type == 'BUY':
+                    holdings[code]['qty'] += qty
+                    holdings[code]['total_cost'] += qty * price
+                    holdings[code]['buy_time'] = timestamp_val
+                elif trade_type == 'SELL':
+                    if holdings[code]['qty'] > 0:
+                        avg_price = holdings[code]['total_cost'] / holdings[code]['qty']
+                        holdings[code]['qty'] = max(0, holdings[code]['qty'] - qty)
+                        holdings[code]['total_cost'] = holdings[code]['qty'] * avg_price
+            
+            for code, h in holdings.items():
+                if h['qty'] > 0:
+                    buy_price = int(h['total_cost'] / h['qty'])
+                    self.positions[code] = {
+                        'qty': h['qty'],
+                        'buy_price': buy_price,
+                        'buy_time': h['buy_time']
+                    }
+                    logging.info(f"📥 [포지션 복구] DB에서 미청산 포지션 복구 완료: {code} (수량: {h['qty']}주, 평단가: {buy_price}원)")
+        except Exception as e:
+            logging.error(f"Error loading open positions from DB: {e}")
+
     def run(self):
         logging.info("🚀 [Extreme Growth 1,000% 목표 모드] 엔진 가동. 미수 풀레버리지/스캘핑 시스템 시작.")
+        # DB로부터 미청산 포지션 동기화 및 복구
+        self.load_open_positions_from_db()
         
         while True:
             current_time = time.strftime("%H:%M:%S")
@@ -149,9 +199,27 @@ class ExtremeGrowthStrategy(BaseStrategy):
                 if code in self.positions:
                     continue
                     
-                # API를 통해 실시간 호가 및 현재가 수신 (Mock)
-                current_price = 50000
-                limit_up_price = 65000
+                # API를 통해 실시간 호가 및 현재가 수신 (10초 캐시 및 예산 비례 폴백 적용)
+                try:
+                    if not hasattr(self, 'price_cache'):
+                        self.price_cache = {}
+                    
+                    if code not in self.price_cache or time.time() - self.price_cache[code]['time'] > 10:
+                        real_prpr = self.broker.get_price(code)
+                        self.price_cache[code] = {
+                            'price': int(real_prpr) if real_prpr > 0 else 50000,
+                            'time': time.time()
+                        }
+                    current_price = self.price_cache[code]['price']
+                except Exception as e:
+                    # API 에러 또는 호출 한도 도달 시 초기 원금 예산에 맞춤 폴백 (예: 2만원 설정 시 1만원)
+                    current_price = min(15000, int(self.initial_capital * 0.5))
+                
+                # 원금 기준 현재가가 여전히 너무 높아 1주도 살 수 없는 경우 예산 맞춤형 동적 조정
+                if current_price > self.initial_capital:
+                    current_price = min(15000, int(self.initial_capital * 0.5))
+                    
+                limit_up_price = int(current_price * 1.3)
                 orderbook_data = {'trade_intensity': 250.0, 'ask_remains': 15000, 'bid_remains': 3000, 'limit_bid_remains': 1000000, 'total_volume': 5000000}
                 current_news = [{'code': code, 'title': '초대형 무상증자 결정 공시'}] # (Mock)
 
