@@ -18,6 +18,18 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 # 페이지 설정
 st.set_page_config(page_title="Real-time Dashboard for Stock Quant Trader", layout="wide")
 
+# 사이드바 상단 여백을 극대화하여 줄여 상단으로 요소를 끌어올림
+st.markdown(
+    """
+    <style>
+        [data-testid="stSidebarUserContent"] {
+            padding-top: 1.5rem !important;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 def get_data():
     try:
         is_virtual = os.getenv('KIS_VIRTUAL_TRADING', 'true').lower() == 'true'
