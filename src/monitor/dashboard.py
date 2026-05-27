@@ -74,6 +74,25 @@ kis_account_no = os.getenv('KIS_ACCOUNT_NO', 'Unknown')
 kis_account_suffix = os.getenv('KIS_ACCOUNT_SUFFIX', '01')
 investment_budget = int(os.getenv('INVESTMENT_BUDGET', '10000'))
 
+BASELINE_FILE = "data/profit_baseline.txt"
+
+def get_profit_baseline(default_value):
+    if os.path.exists(BASELINE_FILE):
+        try:
+            with open(BASELINE_FILE, "r") as f:
+                return float(f.read().strip())
+        except:
+            pass
+    return default_value
+
+def save_profit_baseline(value):
+    try:
+        os.makedirs(os.path.dirname(BASELINE_FILE), exist_ok=True)
+        with open(BASELINE_FILE, "w") as f:
+            f.write(str(value))
+    except Exception as e:
+        print(f"Error saving profit baseline: {e}")
+
 # ---------------------------------------------------
 # Holiday & market status utilities
 # ---------------------------------------------------
@@ -137,12 +156,13 @@ else:
     account_balance_str = "조회 실패"
     real_total_assets = current_total
 
-# 실현손익 계산: 모의 투자면 DB 기록을 그대로 표기하고, 실전 투자면 실제 자산 증감액(실제 총자산 - 원금)만 산출
+# 실현손익 계산: 모의 투자면 DB 기록을 그대로 표기하고, 실전 투자면 실제 자산 증감액(실제 총자산 - 기준액)만 산출
 if is_virtual:
     system_profit = total_profit
     system_profit_label = "시스템 누적 실현손익 (모의)"
 else:
-    system_profit = real_total_assets - investment_budget
+    baseline = get_profit_baseline(investment_budget)
+    system_profit = real_total_assets - baseline
     system_profit_label = "시스템 누적 실현손익 (실전)"
 
 # ---------------------------------------------------
@@ -184,6 +204,13 @@ st.sidebar.markdown(
 """,
     unsafe_allow_html=True
 )
+
+# 실전 모드일 때만 실손익 초기화 기능 제공
+if not is_virtual:
+    if st.sidebar.button("실전 손익 초기화 🔄", help="현재 실제 총자산을 기준으로 누적 실현손익을 0원으로 리셋합니다."):
+        save_profit_baseline(real_total_assets)
+        st.sidebar.success("실전 손익이 0원으로 초기화되었습니다!")
+        st.rerun()
 
 # ---------------------------------------------------
 # Expander for trading‑hours with holiday info and info icon
