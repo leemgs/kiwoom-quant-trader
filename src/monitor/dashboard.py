@@ -219,10 +219,26 @@ st.sidebar.markdown(
 
 # 실전 모드일 때만 실손익 초기화 기능 제공
 if not is_virtual:
-    if st.sidebar.button("실전 손익 초기화 🔄", help="현재 실제 총자산을 기준으로 누적 실현손익을 0원으로 리셋합니다."):
-        save_profit_baseline(real_total_assets)
-        st.sidebar.success("실전 손익이 0원으로 초기화되었습니다!")
-        st.rerun()
+    if 'show_reset_confirm' not in st.session_state:
+        st.session_state['show_reset_confirm'] = False
+
+    if not st.session_state['show_reset_confirm']:
+        if st.sidebar.button("실전 손익 초기화 🔄", help="현재 실제 총자산을 기준으로 누적 실현손익을 0원으로 리셋합니다."):
+            st.session_state['show_reset_confirm'] = True
+            st.rerun()
+    else:
+        st.sidebar.warning("기존 실현 손익액이 0원으로 완전히 초기화됩니다. 정말 수행하시겠습니까?")
+        col1, col2 = st.sidebar.columns(2)
+        with col1:
+            if st.button("예", use_container_width=True):
+                save_profit_baseline(real_total_assets)
+                st.session_state['show_reset_confirm'] = False
+                st.sidebar.success("초기화 완료!")
+                st.rerun()
+        with col2:
+            if st.button("아니오", use_container_width=True):
+                st.session_state['show_reset_confirm'] = False
+                st.rerun()
 
 # ---------------------------------------------------
 # Expander for trading‑hours with holiday info and info icon
