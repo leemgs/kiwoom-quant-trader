@@ -181,11 +181,25 @@ class ExtremeGrowthStrategy(BaseStrategy):
             # 1. 15:15 미수 동결 방지 강제 청산 체크
             if self.leverage_manager.enforce_margin_liquidation(current_time):
                 if not getattr(self, 'liquidation_triggered', False):
-                    logging.warning("⚠️ [리스크 관리] 장 마감 임박. 미수 동결을 막기 위해 전 종목 강제 청산 (상한가 오버나잇 예외 제외)")
+                    logging.warning("⚠️ [리스크 관리] 장 마감 임박. 미체결 주문 취소 및 전 종목 강제 청산 (시장가 주문으로 변경 적용)")
                     self.liquidation_triggered = True
-                    # 보유한 모든 포지션 강제 청산
+                    # 미체결 주문 취소 시도
+                    try:
+                        if hasattr(self.broker, 'cancel_all_orders'):
+                            self.broker.cancel_all_orders()
+                    except Exception as e:
+                        logging.error(f"미체결 주문 취소 실패: {e}")
+                    
+                    # 보유한 모든 포지션 강제 청산 (시장가)
                     for code in list(self.positions.keys()):
-                        self.sell_position(code, reason="장 마감 강제 청산")
+                        try:
+                            # 시장가 매도를 위한 현재가 로드
+                            current_price = self.broker.get_price(code) if hasattr(self.broker, 'get_price') else 50000
+                            pos = self.positions[code]
+                            profit = (current_price - pos['buy_price']) * pos['qty']
+                            self.sell_position(code, current_price=current_price, profit=profit, reason="장 마감 강제 청산")
+                        except Exception as e:
+                            logging.error(f"{code} 장 마감 강제 청산 실패: {e}")
                 pass
             else:
                 self.liquidation_triggered = False
@@ -257,7 +271,8 @@ class ExtremeGrowthStrategy(BaseStrategy):
                     target_qty = int(budget / current_price)
                     
                     if target_qty > 0:
-                        logging.info(f"💰 [자금관리] 켈리 베팅 기반 풀레버리지 진입: 목표 예산 {budget:,.0f}원 (수량: {target_qty}주, 잔여 가용 원금: {available_capital:,.0f}원)")
+                        expected_required_capital = target_qty * current_price
+                        logging.info(f"💰 [자금관리] 켈리 베팅 기반 풀레버리지 진입: 목표 예산 {budget:,.0f}원 (주문: {target_qty}주, 예상 필요 자금: {expected_required_capital:,.0f}원)")
                         # 5. 스마트 지정가 매수 라우팅
                         self.smart_order_routing(code, target_qty, "BUY", current_price, orderbook_data)
                         
@@ -274,7 +289,8 @@ class ExtremeGrowthStrategy(BaseStrategy):
                         if not hasattr(self, 'insufficient_budget_logged'):
                             self.insufficient_budget_logged = set()
                         if code not in self.insufficient_budget_logged:
-                            logging.warning(f"⚠️ [자금관리] 예산 부족으로 {code} 주문 불가 (현재가: {current_price}원, 가용 예산: {budget:,.0f}원, 잔여 가용 원금: {available_capital:,.0f}원). '.env' 파일의 INVESTMENT_BUDGET을 늘려주세요.")
+                            expected_required_capital = current_price # 최소 1주 매수에 필요한 예상 자금
+                            logging.warning(f"⚠️ [자금관리] 예산 부족으로 {code} 주문 불가 (현재가: {current_price}원, 가용 예산: {budget:,.0f}원, 예상 필요 자금: {expected_required_capital:,.0f}원). '.env' 파일의 INVESTMENT_BUDGET을 늘려주세요.")
                             self.insufficient_budget_logged.add(code)
 
                 # 6. 상한가 오버나잇 결정

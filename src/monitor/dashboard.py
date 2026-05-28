@@ -232,6 +232,16 @@ if not is_virtual:
         with col1:
             if st.button("예", use_container_width=True):
                 save_profit_baseline(real_total_assets)
+                # 실전 거래 내역 데이터베이스의 거래 기록 삭제
+                try:
+                    from core.database import TradeDatabase
+                    db = TradeDatabase("data/trading_history_real.db")
+                    with sqlite3.connect(db.db_path) as conn:
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM trades")
+                        conn.commit()
+                except Exception as e:
+                    print(f"Error clearing real trades DB: {e}")
                 st.session_state['show_reset_confirm'] = False
                 st.sidebar.success("초기화 완료!")
                 st.rerun()
@@ -302,27 +312,43 @@ INVESTMENT_PERIOD_MONTH = int(os.getenv('INVESTMENT_PERIOD_MONTH', '1'))
 INVESTMENT_INCOME_GOAL = float(os.getenv('INVESTMENT_INCOME_GOAL', '100000'))
 TARGET_GOAL = INVESTMENT_INCOME_GOAL
 
+# 1. 상단 메트릭 (총 수익, 승률 등) 및 챌린지 현황판
+col1, col2, col3, col4 = st.columns(4)
+
+if not is_virtual:
+    # 실전 투자의 경우:
+    # 누적 손익은 system_profit (실제 총자산 - baseline)
+    # 현재 총 자산은 실제 총자산 (real_total_assets)
+    display_profit = system_profit
+    display_current_total = real_total_assets
+else:
+    # 모의 투자의 경우:
+    # 누적 손익은 DB 거래 내역의 합
+    # 현재 총 자산은 시작 자산 + 누적 손익
+    display_profit = df['profit'].sum() if not df.empty else 0.0
+    display_current_total = INITIAL_SEED + display_profit
+
 if not df.empty:
-    # 1. 상단 메트릭 (총 수익, 승률 등)
-    col1, col2, col3, col4 = st.columns(4)
     total_trades = len(df)
     win_rate = (df['profit'] > 0).mean() * 100
-    total_profit = df['profit'].sum()
-    
-    col1.metric("총 거래 횟수", f"{total_trades}회")
-    col2.metric("승률", f"{win_rate:.1f}%")
-    col3.metric("누적 손익", f"{total_profit:,.0f}원", delta=f"{total_profit:,.0f}")
-    col4.metric("목표 달성률", f"{(total_profit/TARGET_GOAL)*100:.1f}%")
+else:
+    total_trades = 0
+    win_rate = 0.0
 
-    # 1.5 챌린지 현황판
-    st.divider()
-    st.subheader(f"🎯 {INVESTMENT_PERIOD_MONTH}개월 수익 도전 ({INITIAL_SEED:,}원 → {TARGET_GOAL:,}원)")
-    current_total = INITIAL_SEED + total_profit
-    progress = min(1.0, max(0.0, current_total / TARGET_GOAL))
-    st.progress(progress)
-    st.write(f"현재 총 자산: **{current_total:,.0f}원** / 목표 자산: **{TARGET_GOAL:,.0f}원**")
+col1.metric("총 거래 횟수", f"{total_trades}회")
+col2.metric("승률", f"{win_rate:.1f}%")
+col3.metric("누적 손익", f"{display_profit:,.0f}원", delta=f"{display_profit:,.0f}")
+col4.metric("목표 달성률", f"{(display_profit/TARGET_GOAL)*100:.1f}%")
 
-    # 2. 실시간 수익률 곡선
+# 1.5 챌린지 현황판
+st.divider()
+st.subheader(f"🎯 {INVESTMENT_PERIOD_MONTH}개월 수익 도전 ({INITIAL_SEED:,}원 → {TARGET_GOAL:,}원)")
+progress = min(1.0, max(0.0, display_current_total / TARGET_GOAL))
+st.progress(progress)
+st.write(f"현재 총 자산: **{display_current_total:,.0f}원** / 목표 자산: **{TARGET_GOAL:,.0f}원**")
+
+# 2. 실시간 수익률 곡선 및 상세 정보
+if not df.empty:
     st.subheader("📈 Cumulative Equity Curve")
     df['timestamp'] = pd.to_datetime(df['timestamp'])
     df = df.sort_values('timestamp')
@@ -369,7 +395,7 @@ if not df.empty:
             review = journal.generate_review(df, "Nasdaq: +1.2%, USD/KRW: -0.5%")
             st.info(review)
 else:
-    st.warning("아직 거래 내역이 없습니다. 시스템이 거래를 시작하면 대시보드가 활성화됩니다.")
+    st.warning("아직 거래 내역이 없습니다. 시스템이 거래를 시작하면 차트와 상세 내역이 활성화됩니다.")
 
 # ---------------------------------------------------
 # System Activity Logs (실시간 시스템 로그)
