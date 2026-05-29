@@ -331,11 +331,26 @@ else:
 if not df.empty:
     total_trades = len(df)
     win_rate = (df['profit'] > 0).mean() * 100
+    buy_count = len(df[df['type'].str.upper() == 'BUY']) if 'type' in df.columns else 0
+    sell_count = len(df[df['type'].str.upper() == 'SELL']) if 'type' in df.columns else 0
 else:
     total_trades = 0
     win_rate = 0.0
+    buy_count = 0
+    sell_count = 0
 
-col1.metric("총 거래 횟수", f"{total_trades}회")
+# 미체결수량 (API 추가 연동 전까지 0으로 처리, 현재 시장가 위주 매매로 미체결 거의 없음)
+unfilled_buy = 0
+unfilled_sell = 0
+
+with col1:
+    st.metric("총 거래 횟수", f"{total_trades}회")
+    st.markdown(f"""
+        <div style="font-size: 11px; color: #888; margin-top: -10px; line-height: 1.3;">
+            체결수량 (매수: {buy_count}회 , 매도: {sell_count}회)<br>
+            미체결수량 (매수: {unfilled_buy}회 , 매도: {unfilled_sell}회)
+        </div>
+    """, unsafe_allow_html=True)
 col2.metric("승률", f"{win_rate:.1f}%")
 col3.metric("누적 손익", f"{display_profit:,.0f}원", delta=f"{display_profit:,.0f}")
 col4.metric("목표 달성률", f"{(display_profit/TARGET_GOAL)*100:.1f}%")
