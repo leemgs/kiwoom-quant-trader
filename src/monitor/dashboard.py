@@ -401,7 +401,26 @@ else:
 # System Activity Logs (실시간 시스템 로그)
 # ---------------------------------------------------
 st.divider()
-st.subheader("🤖 System Activity Logs (실시간 시스템 로그)")
+
+col_log_title, col_log_btn = st.columns([4, 1])
+with col_log_title:
+    st.subheader("🤖 System Activity Logs (실시간 시스템 로그)")
+
+with col_log_btn:
+    log_file_path = "logs/trading.log"
+    if os.path.exists(log_file_path):
+        try:
+            with open(log_file_path, "r", encoding="utf-8") as f:
+                log_content = f.read()
+            st.download_button(
+                label="로그 다운로드 💾",
+                data=log_content,
+                file_name=f"trading_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
+        except Exception as e:
+            pass
 
 def get_recent_logs(log_path="logs/trading.log", num_lines=30):
     if not os.path.exists(log_path):
