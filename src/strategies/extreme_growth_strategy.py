@@ -308,9 +308,9 @@ class ExtremeGrowthStrategy(BaseStrategy):
                             logging.warning(f"⚠️ [자금관리] 예산 부족으로 {code} 주문 불가 (현재가: {current_price}원, 가용 예산: {budget:,.0f}원, 예상 필요 자금: {expected_required_capital:,.0f}원). '.env' 파일의 INVESTMENT_BUDGET을 늘려주세요.")
                             self.insufficient_budget_logged.add(code)
 
-                # 6. 상한가 오버나잇 결정
-                if self.decide_limit_up_overnight(code, current_price, limit_up_price, orderbook_data):
-                    pass
+                # 6. 상한가 오버나잇 결정 (실제 호가 데이터 미연동으로 비활성화)
+                # if self.decide_limit_up_overnight(code, current_price, limit_up_price, ...):
+                #     pass
                 
                 # (루프 간 지연 방지용)
                 time.sleep(0.1) 
