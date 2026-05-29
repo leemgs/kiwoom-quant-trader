@@ -213,35 +213,50 @@ class ExtremeGrowthStrategy(BaseStrategy):
                 if code in self.positions:
                     continue
                     
-                # API를 통해 실시간 호가 및 현재가 수신 (10초 캐시 및 예산 비례 폴백 적용)
+                # API를 통해 실시간 현재가 수신 (10초 캐시 적용)
                 try:
                     if not hasattr(self, 'price_cache'):
                         self.price_cache = {}
                     
                     if code not in self.price_cache or time.time() - self.price_cache[code]['time'] > 10:
                         real_prpr = self.broker.get_price(code)
-                        self.price_cache[code] = {
-                            'price': int(real_prpr) if real_prpr > 0 else 50000,
-                            'time': time.time()
-                        }
+                        if real_prpr and real_prpr > 0:
+                            self.price_cache[code] = {
+                                'price': int(real_prpr),
+                                'time': time.time()
+                            }
+                        else:
+                            logging.warning(f"⚠️ [{code}] KIS API 현재가 조회 실패 (0원 반환). 해당 종목 매매를 건너뜁니다.")
+                            continue
                     current_price = self.price_cache[code]['price']
                 except Exception as e:
-                    # API 에러 또는 호출 한도 도달 시 초기 원금 예산에 맞춤 폴백 (예: 2만원 설정 시 1만원)
-                    current_price = min(15000, int(self.initial_capital * 0.5))
+                    logging.warning(f"⚠️ [{code}] KIS API 현재가 조회 에러: {e}. 해당 종목 매매를 건너뜁니다.")
+                    continue
                 
-                # 원금 기준 현재가가 여전히 너무 높아 1주도 살 수 없는 경우 예산 맞춤형 동적 조정
-                if current_price > self.initial_capital:
-                    current_price = min(15000, int(self.initial_capital * 0.5))
+                # 예산이 현재가보다 낮아 1주도 살 수 없는 경우 스킵 (가짜 가격으로 대체하지 않음)
+                if current_price > self.initial_capital + (self.db.get_total_profit() if self.db else 0):
+                    logging.warning(f"⚠️ [{code}] 현재가({current_price:,}원)가 총 가용 자본보다 높아 매수 불가. INVESTMENT_BUDGET을 늘려주세요.")
+                    continue
                     
                 limit_up_price = int(current_price * 1.3)
-                orderbook_data = {'trade_intensity': 250.0, 'ask_remains': 15000, 'bid_remains': 3000, 'limit_bid_remains': 1000000, 'total_volume': 5000000}
-                current_news = [{'code': code, 'title': '초대형 무상증자 결정 공시'}] # (Mock)
-
-                # 2. 뉴스 이벤트 드리븐 감지
-                news_target = self.scan_event_driven_news(current_news)
+                # 실제 호가 데이터 없이 기본 스캘핑 신호 사용 (변동성 돌파 기반)
+                # orderbook_data는 실제 API 연동 전까지 volatility 기반 신호로 대체
+                import random
+                # 실제 가격 변동성을 기반으로 매수 신호 생성 (돌파전략: 전일 대비 0.5% 이상 상승 시)
+                if not hasattr(self, 'prev_price_cache'):
+                    self.prev_price_cache = {}
+                prev_price = self.prev_price_cache.get(code, current_price)
+                price_change_pct = (current_price - prev_price) / prev_price if prev_price > 0 else 0
+                self.prev_price_cache[code] = current_price
                 
-                # 3. 마이크로 틱 스캘핑 호가창 돌파 감지
-                is_breakout = self.analyze_micro_scalping_orderbook(code, orderbook_data)
+                # 변동성 돌파 신호: 가격이 K_VALUE(0.3) 이상 상승 중이면 매수 신호
+                k_value = self.config.get('k_value', 0.3) if self.config.get('k_value') else 0.3
+                is_breakout = price_change_pct >= k_value * 0.01  # 0.3% 이상 상승 시 돌파 신호
+                
+                # 뉴스는 실제 DART API 미연동 상태이므로 비활성화
+                news_target = None
+
+                # 2. 돌파 신호 확인 (뉴스 또는 변동성 돌파)
 
                 if news_target == code or is_breakout:
                     total_profit = self.db.get_total_profit() if self.db else 0.0

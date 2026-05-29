@@ -5,10 +5,20 @@ import pandas as pd
 class AITradingJournal:
     def __init__(self, api_key):
         self.api_key = api_key
+        self.model = None
         if api_key:
             genai.configure(api_key=api_key)
-            self.model = genai.GenerativeModel('gemini-1.5-flash')
-        self.enabled = True if api_key else False
+            # 최신 모델부터 순서대로 시도 (API 버전 호환성 대응)
+            for model_name in ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-pro', 'gemini-1.0-pro']:
+                try:
+                    m = genai.GenerativeModel(model_name)
+                    m.generate_content("test")
+                    self.model = m
+                    logging.info(f"Gemini AI 모델 초기화 성공: {model_name}")
+                    break
+                except Exception as e:
+                    logging.warning(f"모델 {model_name} 사용 불가: {e}")
+        self.enabled = self.model is not None
 
     def generate_review(self, trade_df, macro_status):
         """최근 거래 내역과 거시 지표를 분석하여 복기 리포트 생성"""
@@ -31,4 +41,4 @@ class AITradingJournal:
             return response.text
         except Exception as e:
             logging.error(f"AI 복기 생성 에러: {str(e)}")
-            return "AI 분석 중 오류가 발생했습니다."
+            return f"AI 분석 중 오류가 발생했습니다: {str(e)}"
