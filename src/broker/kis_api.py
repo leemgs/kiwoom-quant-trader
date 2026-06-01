@@ -242,7 +242,7 @@ class KISBroker:
         if order_type == "01":
             res = self.api.create_market_buy_order(code, qty)
         else:
-            res = self.api.create_limit_buy_order(code, qty, price)
+            res = self.api.create_limit_buy_order(code, price, qty)
         return res
 
     def send_sell_order(self, code, qty, price, order_type="01"):
@@ -250,5 +250,5 @@ class KISBroker:
         if order_type == "01":
             res = self.api.create_market_sell_order(code, qty)
         else:
-            res = self.api.create_limit_sell_order(code, qty, price)
+            res = self.api.create_limit_sell_order(code, price, qty)
         return res

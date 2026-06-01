@@ -50,14 +50,16 @@ class ExtremeGrowthStrategy(BaseStrategy):
         """시장가(Taker) 대신 최적의 호가에 지정가(Maker)로 깔아 수수료 및 슬리피지 방어"""
         if not self.config.get('smart_order_routing', False):
             # 기본 시장가 주문
-            return self.broker.send_order(code, target_qty, order_type=order_type, price=0) # 0은 시장가
+            broker_order_type = "01" if order_type == "BUY" else "02"
+            return self.broker.send_order(code, target_qty, order_type=broker_order_type, price=0)
             
         # 최적 지정가 계산 (단순화: 매수 시 최우선 매도호가에서 1틱 뺀 가격 등)
         # orderbook 데이터를 활용하여 1~3호가 사이의 최적의 Maker 가격 산출
         best_maker_price = current_price # 실제 구현시 호가 스프레드 분석
         
         logging.info(f"[Smart Order Routing] {order_type} 지정가 주문 대기 (슬리피지 방어): {best_maker_price}원")
-        return self.broker.send_order(code, target_qty, order_type="LIMIT_MAKER", price=best_maker_price)
+        # 지정가 매수 주문은 order_type="00"을 넘겨줍니다.
+        return self.broker.send_order(code, target_qty, price=best_maker_price, order_type="00")
 
     def scan_event_driven_news(self, current_news_feed):
         """DART 공시 및 뉴스 속보를 스크래핑하여 즉각 반응 (임상성공, 무상증자 등)"""
@@ -94,7 +96,7 @@ class ExtremeGrowthStrategy(BaseStrategy):
         return False
 
     def monitor_position(self, code):
-        """보유 포지션 실시간 익절/손절 감시 (Mock 시뮬레이션)"""
+        """보유 포지션 실시간 익절/손절 감시 (실시간 현재가 조회)"""
         if code not in self.positions:
             return
             
@@ -102,23 +104,27 @@ class ExtremeGrowthStrategy(BaseStrategy):
         buy_price = pos['buy_price']
         qty = pos['qty']
         
-        # 실시간 가격 시뮬레이션 (Mock 가격 변동: 70% 확률로 익절 상승, 30% 확률로 손절 하락)
-        import random
-        price_change_pct = random.choice([0.035, 0.04, -0.02, 0.01, 0.03, -0.01])
-        current_price = int(buy_price * (1 + price_change_pct))
-        
+        # 실시간 현재가 조회 (오류 시 이전 상태 보존 및 다음 기회로 미룸)
+        try:
+            current_price = self.broker.get_price(code)
+            if current_price <= 0:
+                raise ValueError("현재가가 0원 이하입니다.")
+            current_price = int(current_price)
+        except Exception as e:
+            logging.warning(f"⚠️ [{code}] 포지션 실시간 가격 조회 실패: {e}")
+            return
+            
         # 익절/손절 기준 설정
         take_profit_price = buy_price * (1 + 0.03) # 3% 익절
         stop_loss_price = buy_price * (1 - self.stop_loss) # 1.5% 손절
         
+        profit = (current_price - buy_price) * qty
+        
         if current_price >= take_profit_price:
-            profit = (current_price - buy_price) * qty
             self.sell_position(code, current_price, profit, reason="익절 (Take Profit)")
         elif current_price <= stop_loss_price:
-            profit = (current_price - buy_price) * qty
             self.sell_position(code, current_price, profit, reason="손절 (Stop Loss)")
         elif time.time() - pos['buy_time'] > 15: # 15초 지나면 청산 (타임아웃)
-            profit = (current_price - buy_price) * qty
             self.sell_position(code, current_price, profit, reason="시간 경과 청산")
 
     def sell_position(self, code, current_price=50000, profit=0, reason=""):
@@ -130,18 +136,29 @@ class ExtremeGrowthStrategy(BaseStrategy):
         
         logging.info(f"⚖️ [포지션 청산] {code} 매도 진행 ({reason}): 매도가 {current_price}원, 손익 {profit:+,}원")
         # 실제 매도 주문 전송
-        self.broker.send_sell_order(code, qty, current_price, order_type="01")
+        res = self.broker.send_sell_order(code, qty, current_price, order_type="01")
         
-        # DB에 매도 기록
-        if self.db:
-            self.db.log_trade(code, "SELL", qty, current_price, profit=profit)
+        # API 응답 확인: 실전/모의 API 응답 코드(rt_cd)가 '0'일 때만 DB 기록 및 포지션 제거
+        if isinstance(res, dict) and res.get('rt_cd') == '0':
+            # DB에 매도 기록
+            if self.db:
+                self.db.log_trade(code, "SELL", qty, current_price, profit=profit)
+                
+            # 레버리지 매니저 피드백 반영
+            profit_pct = profit / (pos['buy_price'] * qty)
+            self.leverage_manager.update_trade_result(is_win=(profit > 0), profit_pct=profit_pct)
             
-        # 레버리지 매니저 피드백 반영
-        profit_pct = profit / (pos['buy_price'] * qty)
-        self.leverage_manager.update_trade_result(is_win=(profit > 0), profit_pct=profit_pct)
-        
-        # 포지션 삭제
-        del self.positions[code]
+            # 포지션 삭제
+            del self.positions[code]
+            logging.info(f"✅ [{code}] 매도 청산 완료 및 DB 기록 성공!")
+        else:
+            msg = res.get('msg1', '알 수 없는 오류') if isinstance(res, dict) else '응답 없음'
+            logging.error(f"❌ [{code}] 매도 청산 주문 실패 (API 오류): {msg}")
+            
+            # 계좌 잔고 불일치 등의 이유로 청산이 계속 실패하는 고스트 포지션은 목록에서 제거
+            if isinstance(res, dict) and ('잔고' in msg or '수량' in msg or 'KIOK' in res.get('msg_cd', '')):
+                logging.warning(f"⚠️ [{code}] 계좌 잔고 불일치 감지. 고스트 포지션을 강제로 목록에서 제거합니다.")
+                del self.positions[code]
 
     def load_open_positions_from_db(self):
         """DB의 거래 이력을 바탕으로 미청산된 포지션을 로드하여 실시간 익절/손절 감시 대상에 등록"""
@@ -315,16 +332,22 @@ class ExtremeGrowthStrategy(BaseStrategy):
                         expected_required_capital = target_qty * current_price
                         logging.info(f"💰 [자금관리] 켈리 베팅 기반 진입: 목표 예산 {budget:,.0f}원 (주문: {target_qty}주, 예상 필요 자금: {expected_required_capital:,.0f}원)")
                         # 5. 스마트 지정가 매수 라우팅 (orderbook_data 없이 시장가 주문)
-                        self.smart_order_routing(code, target_qty, "BUY", current_price, orderbook=None)
+                        res = self.smart_order_routing(code, target_qty, "BUY", current_price, orderbook=None)
                         
-                        # 포지션 등록 및 DB 기록
-                        self.positions[code] = {
-                            'qty': target_qty,
-                            'buy_price': current_price,
-                            'buy_time': time.time()
-                        }
-                        if self.db:
-                            self.db.log_trade(code, "BUY", target_qty, current_price, profit=0)
+                        # API 응답 확인: 실전/모의 API 응답 코드(rt_cd)가 '0'일 때만 포지션 등록 및 DB 기록
+                        if isinstance(res, dict) and res.get('rt_cd') == '0':
+                            # 포지션 등록 및 DB 기록
+                            self.positions[code] = {
+                                'qty': target_qty,
+                                'buy_price': current_price,
+                                'buy_time': time.time()
+                            }
+                            if self.db:
+                                self.db.log_trade(code, "BUY", target_qty, current_price, profit=0)
+                            logging.info(f"✅ [{code}] 매수 주문 접수 및 포지션 등록 성공! (수량: {target_qty}주, 진입가: {current_price:,}원)")
+                        else:
+                            msg = res.get('msg1', '알 수 없는 오류') if isinstance(res, dict) else '응답 없음'
+                            logging.error(f"❌ [{code}] 매수 주문 실패 (API 오류): {msg}")
                     else:
                         # 예산 부족 로그 (최초 1회만 출력되도록 처리)
                         if not hasattr(self, 'insufficient_budget_logged'):
