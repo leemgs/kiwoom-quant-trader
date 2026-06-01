@@ -20,7 +20,28 @@ class ExtremeGrowthStrategy(BaseStrategy):
         self.initial_capital = initial_capital
         self.max_trading_limit = config.get('trading', {}).get('max_trading_limit', 100000)
         self.leverage_manager = DynamicLeverageManager(initial_capital=initial_capital)
+        self._cash_balance_cache = {'value': None, 'time': 0}  # 예수금 캐시 (30초)
         
+    def get_real_cash_balance(self):
+        """실제 계좌 예수금(현금) 조회 (30초 캐시 적용, 오류 시 초기자본 반환)"""
+        now = time.time()
+        if self._cash_balance_cache['value'] is not None and now - self._cash_balance_cache['time'] < 30:
+            return self._cash_balance_cache['value']
+        try:
+            # fetch_balance()는 output2에 계좌 종합 정보(예수금 포함)를 담아 반환
+            res = self.broker.api.fetch_balance()
+            output2 = res.get('output2', [])
+            if output2 and len(output2) > 0:
+                cash = int(output2[0].get('dnca_tot_amt', 0))  # 예수금 총액
+                if cash > 0:
+                    self._cash_balance_cache = {'value': cash, 'time': now}
+                    logging.info(f"💳 [예수금 조회] 실제 계좌 예수금: {cash:,}원")
+                    return cash
+        except Exception as e:
+            logging.warning(f"⚠️ 계좌 예수금 조회 실패: {e}. 초기자본({self.initial_capital:,}원)으로 대체합니다.")
+        # 폴백: initial_capital 사용
+        return self.initial_capital
+
     def check_signal(self, code, df):
         """BaseStrategy의 추상 메서드 구현. 해당 전략은 run()에서 자체 로직을 사용하므로 여기서는 사용하지 않음."""
         return False
@@ -233,9 +254,10 @@ class ExtremeGrowthStrategy(BaseStrategy):
                     logging.warning(f"⚠️ [{code}] KIS API 현재가 조회 에러: {e}. 해당 종목 매매를 건너뜁니다.")
                     continue
                 
-                # 예산이 현재가보다 낮아 1주도 살 수 없는 경우 스킵 (가짜 가격으로 대체하지 않음)
-                if current_price > self.initial_capital + (self.db.get_total_profit() if self.db else 0):
-                    logging.warning(f"⚠️ [{code}] 현재가({current_price:,}원)가 총 가용 자본보다 높아 매수 불가. INVESTMENT_BUDGET을 늘려주세요.")
+                # 실제 계좌 예수금 기반으로 1주도 살 수 없으면 스킵
+                real_cash = self.get_real_cash_balance()
+                if current_price > real_cash:
+                    logging.warning(f"⚠️ [{code}] 현재가({current_price:,}원)가 실제 예수금({real_cash:,}원)보다 높아 매수 불가. (종목 제외됨)")
                     continue
                     
                 limit_up_price = int(current_price * 1.3)
@@ -259,21 +281,25 @@ class ExtremeGrowthStrategy(BaseStrategy):
                 # 2. 돌파 신호 확인 (뉴스 또는 변동성 돌파)
 
                 if news_target == code or is_breakout:
-                    total_profit = self.db.get_total_profit() if self.db else 0.0
-                    total_allowed_capital = self.initial_capital + total_profit
-                    if self.max_trading_limit is not None:
-                        total_allowed_capital = min(total_allowed_capital, self.max_trading_limit)
+                    # 실제 계좌 예수금 및 총 자산 산출
+                    real_cash = self.get_real_cash_balance()
                     
                     # DB 기반으로 열린 포지션들의 매수 원금을 계산
                     open_positions_cost = self.db.get_open_positions_cost() if self.db else sum(
                         pos['qty'] * pos['buy_price'] for pos in self.positions.values()
                     )
-                    # 남은 가용 원금 = 허용 총 자본 - 현재 보유 종목 매수 원금
-                    available_capital = max(0.0, total_allowed_capital - open_positions_cost)
+                    
+                    total_assets = real_cash + open_positions_cost
+                    
+                    # 최대 허용 한도에서 이미 투자된 금액을 뺀 가용 한도
+                    limit_based_available = max(0.0, self.max_trading_limit - open_positions_cost) if self.max_trading_limit else real_cash
+                    
+                    # 실제 가용 원금은 실제 예수금과 한도 중 작은 값
+                    available_capital = min(real_cash, limit_based_available)
 
-                    # 켈리 공식 및 미수 레버리지 자금 할당 (총 한도를 기준으로 베팅 비율 산출)
+                    # 켈리 공식 및 미수 레버리지 자금 할당 (총 자산을 기준으로 베팅 비율 산출)
                     budget = self.leverage_manager.get_optimal_budget(
-                        current_account_balance=total_allowed_capital, 
+                        current_account_balance=total_assets, 
                         use_margin=self.config.get('use_margin_leverage', True)
                     )
                     
@@ -287,9 +313,9 @@ class ExtremeGrowthStrategy(BaseStrategy):
                     
                     if target_qty > 0:
                         expected_required_capital = target_qty * current_price
-                        logging.info(f"💰 [자금관리] 켈리 베팅 기반 풀레버리지 진입: 목표 예산 {budget:,.0f}원 (주문: {target_qty}주, 예상 필요 자금: {expected_required_capital:,.0f}원)")
-                        # 5. 스마트 지정가 매수 라우팅
-                        self.smart_order_routing(code, target_qty, "BUY", current_price, orderbook_data)
+                        logging.info(f"💰 [자금관리] 켈리 베팅 기반 진입: 목표 예산 {budget:,.0f}원 (주문: {target_qty}주, 예상 필요 자금: {expected_required_capital:,.0f}원)")
+                        # 5. 스마트 지정가 매수 라우팅 (orderbook_data 없이 시장가 주문)
+                        self.smart_order_routing(code, target_qty, "BUY", current_price, orderbook=None)
                         
                         # 포지션 등록 및 DB 기록
                         self.positions[code] = {
@@ -305,7 +331,10 @@ class ExtremeGrowthStrategy(BaseStrategy):
                             self.insufficient_budget_logged = set()
                         if code not in self.insufficient_budget_logged:
                             expected_required_capital = current_price # 최소 1주 매수에 필요한 예상 자금
-                            logging.warning(f"⚠️ [자금관리] 예산 부족으로 {code} 주문 불가 (현재가: {current_price}원, 가용 예산: {budget:,.0f}원, 예상 필요 자금: {expected_required_capital:,.0f}원). '.env' 파일의 INVESTMENT_BUDGET을 늘려주세요.")
+                            if open_positions_cost > 0 and available_capital < current_price:
+                                logging.info(f"⏸️ [자금관리] {code} 주문 대기: 현재 보유 종목으로 인해 가용 예산이 부족합니다 (현재가: {current_price}원, 가용 예산: {budget:,.0f}원).")
+                            else:
+                                logging.warning(f"⚠️ [자금관리] 예산 부족으로 {code} 주문 불가 (현재가: {current_price}원, 가용 예산: {budget:,.0f}원, 예상 필요 자금: {expected_required_capital:,.0f}원). '.env' 파일의 INVESTMENT_BUDGET을 늘려주세요.")
                             self.insufficient_budget_logged.add(code)
 
                 # 6. 상한가 오버나잇 결정 (실제 호가 데이터 미연동으로 비활성화)
