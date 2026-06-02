@@ -409,15 +409,27 @@ if not df.empty:
     col_left, col_right = st.columns(2)
 
     with col_left:
-        st.subheader("📋 Recent Trade History")
+        col_trade_title, col_trade_btn = st.columns([3, 1.2])
+        with col_trade_title:
+            st.subheader("📋 Recent Trade History")
+        with col_trade_btn:
+            csv_data = df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="CSV 다운로드 💾",
+                data=csv_data,
+                file_name=f"trade_history_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
         st.dataframe(df.sort_values('timestamp', ascending=False).head(10), use_container_width=True)
 
     with col_right:
         st.subheader("🔥 Profit/Loss Heatmap")
         df_group = df.groupby('code', as_index=False)['profit'].sum()
-        df_group['abs_profit'] = df_group['profit'].abs()
-        if df_group['abs_profit'].sum() == 0:
-            df_group['abs_profit'] = 1.0
+        df_group['abs_profit'] = df_group['profit'].abs().fillna(0)
+        # To avoid ZeroDivisionError in plotly's weighted average when weights sum to zero for any group,
+        # we ensure abs_profit is at least a small positive number.
+        df_group.loc[df_group['abs_profit'] <= 0, 'abs_profit'] = 1e-5
         fig_heat = px.treemap(df_group, path=['code'], values='abs_profit', color='profit',
                               color_continuous_scale='RdYlGn', title='종목별 수익 기여도',
                               hover_data=['profit'])
