@@ -74,6 +74,9 @@ graph TD
 - **Core Engine**: `kis-developers`를 이용한 한국투자증권 REST/WebSocket 통신 제어.
 - **Dual-Market Engine**: 단일 봇에서 국내 주식(KOSPI/KOSDAQ) 및 미국 주식(NYSE/NASDAQ) 유니버스를 동시에 지원하고 교차 매매 수행.
 - **Holiday-Aware Scheduler**: 한국(KR) 및 미국(US) 국가 공휴일을 실시간 확인하여, 휴장일에는 자동으로 거래를 멈추고 5분 단위 저전력 대기모드로 진입해 오작동 및 불필요한 API 호출을 원천 차단.
+- **Zero-Ghost Trades API 검증 엔진 🛡️**: KIS API의 실제 주문 처리 응답코드(`rt_cd == '0'`)를 완벽히 검증하여, 실제 체결/접수 완료된 거래만 포지션으로 등록하고 SQLite DB에 기록하도록 개편해 허위 기록 유발을 원천 차단.
+- **실시간 KIS 시세 감시 📊**: 보유 포지션 감시 및 익절/손절 시뮬레이션을 배제하고 KIS API 실시간 현재가 시세 조회(`self.broker.get_price(code)`)를 직접 연동하여 정밀하고 안정적인 리스크 관리(손절 -1.5%, 익절 +3.0%) 가동.
+- **스마트 지정가 Maker 라우팅 ⚡**: Mojito의 지정가 매수/매도 API 매칭 인자(`symbol, price, quantity` 순)를 완벽히 정렬하여, 시장가 슬리피지 방지 및 Maker 수수료 혜택이 실제 계좌 상에서 작동하도록 전면 개편.
 - **Strategy Manager**: **앙상블(Ensemble) 엔진** 탑재. 돌파, 평균회귀, 추세추종 전략의 가중 투표 방식 채택.
 - **Risk Manager**: **글로벌 세이프 가드(Safe Guard)** 탑재. 나스닥 및 환율 추이에 따라 매매 비중 자동 조절.
 - **Paper Trading Engine**: 실시간 호가 잔량 및 슬리피지를 반영한 정밀 가상 매매 시뮬레이터.

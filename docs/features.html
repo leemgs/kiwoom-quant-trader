@@ -79,6 +79,19 @@
                 </div>
                 <div class="detail-img"><img src="img/holiday_checking_preview.png" alt="Dual Market & Holiday Check Preview" class="feature-img"></div>
             </div>
+
+            <div class="detail-card">
+                <div class="detail-text">
+                    <h2>⚡ 스마트 지정가 주문 & 실시간 KIS 시세 API 검증 엔진 (Smart Routing & Zero-Ghost Trades)</h2>
+                    <p>실제 증권 계좌 자산과의 오차 및 슬리피지를 원천 차단하는 초정밀 실전 자동매매 코어 엔진입니다.</p>
+                    <ul>
+                        <li><strong>Zero-Ghost Trades 🛡️</strong>: KIS Open API 주문 처리 응답코드(rt_cd == '0')를 철저히 검증하여, 실제 체결/접수 완료된 거래만 포지션으로 등록하고 SQLite DB에 기록해 허위 기록 발생을 원천 차단</li>
+                        <li><strong>실시간 KIS 시세 감시 📊</strong>: 보유 포지션 감시 시 난수 시뮬레이션을 배제하고 KIS API 실시간 현재가 조회를 통해 실제 시장 가격 기준 정밀 익절(+3.0%) 및 손절(-1.5%) 집행</li>
+                        <li><strong>스마트 지정가 Maker 주문 ⚡</strong>: Mojito KIS API의 지정가 매수/매도 API 매칭 인자(symbol, price, quantity 순)를 완벽히 연동하여 실제 호가 슬리피지 방지 및 Maker 수수료 혜택 제공</li>
+                    </ul>
+                </div>
+                <div class="detail-img"><img src="img/api_validation_concept.png" alt="KIS API Validation Concept" class="feature-img"></div>
+            </div>
         </div>
     </main>
 
