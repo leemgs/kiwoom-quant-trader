@@ -1,4 +1,6 @@
+import gc
 import numpy as np
+import pandas as pd
 import time
 import logging
 from .base_strategy import BaseStrategy
@@ -13,6 +15,7 @@ class ExtremeGrowthStrategy(BaseStrategy):
         self.universe = universe
         self.config = config.get('trading', {}).get('extreme_growth', {})
         self.stop_loss = config.get('trading', {}).get('stop_loss', 0.015)
+        self.take_profit = config.get('trading', {}).get('take_profit', 0.03)
         self.db = db
         self.positions = {} # 현재 보유 포지션 관리
         
@@ -21,6 +24,11 @@ class ExtremeGrowthStrategy(BaseStrategy):
         self.max_trading_limit = config.get('trading', {}).get('max_trading_limit', 100000)
         self.leverage_manager = DynamicLeverageManager(initial_capital=initial_capital)
         self._cash_balance_cache = {'value': None, 'time': 0}  # 예수금 캐시 (30초)
+        
+        self.holding_timeout = int(self.config.get('holding_timeout', 1800)) # 30분 기본값
+        self.daily_open_prices = {}
+        self.traded_today = set()
+        self.current_date = time.strftime("%Y-%m-%d")
         
     def get_real_cash_balance(self):
         """실제 계좌 예수금(현금) 조회 (30초 캐시 적용, 오류 시 초기자본 반환)"""
@@ -115,8 +123,8 @@ class ExtremeGrowthStrategy(BaseStrategy):
             return
             
         # 익절/손절 기준 설정
-        take_profit_price = buy_price * (1 + 0.03) # 3% 익절
-        stop_loss_price = buy_price * (1 - self.stop_loss) # 1.5% 손절
+        take_profit_price = buy_price * (1 + self.take_profit) # 설정된 익절값 반영
+        stop_loss_price = buy_price * (1 - self.stop_loss) # 설정된 손절값 반영
         
         profit = (current_price - buy_price) * qty
         
@@ -124,8 +132,8 @@ class ExtremeGrowthStrategy(BaseStrategy):
             self.sell_position(code, current_price, profit, reason="익절 (Take Profit)")
         elif current_price <= stop_loss_price:
             self.sell_position(code, current_price, profit, reason="손절 (Stop Loss)")
-        elif time.time() - pos['buy_time'] > 15: # 15초 지나면 청산 (타임아웃)
-            self.sell_position(code, current_price, profit, reason="시간 경과 청산")
+        elif time.time() - pos['buy_time'] > self.holding_timeout: # 연장된 타임아웃 반영
+            self.sell_position(code, current_price, profit, reason=f"시간 경과 청산 ({self.holding_timeout}초)")
 
     def sell_position(self, code, current_price=50000, profit=0, reason=""):
         if code not in self.positions:
@@ -148,9 +156,13 @@ class ExtremeGrowthStrategy(BaseStrategy):
             profit_pct = profit / (pos['buy_price'] * qty)
             self.leverage_manager.update_trade_result(is_win=(profit > 0), profit_pct=profit_pct)
             
+            # 예수금 캐시 즉각 무효화 및 당일 매매 종목 추가
+            self._cash_balance_cache = {'value': None, 'time': 0}
+            self.traded_today.add(code)
+            
             # 포지션 삭제
             del self.positions[code]
-            logging.info(f"✅ [{code}] 매도 청산 완료 및 DB 기록 성공!")
+            logging.info(f"✅ [{code}] 매도 청산 완료, 당일 재진입 제한(Traded Today) 및 DB 기록 성공!")
         else:
             msg = res.get('msg1', '알 수 없는 오류') if isinstance(res, dict) else '응답 없음'
             logging.error(f"❌ [{code}] 매도 청산 주문 실패 (API 오류): {msg}")
@@ -166,26 +178,26 @@ class ExtremeGrowthStrategy(BaseStrategy):
             return
             
         try:
-            df = self.db.get_all_trades()
+            df = self.db.get_all_trades(limit=2000)  # 전체 로드 대신 최근 2000건만
             if df.empty:
                 return
-                
+
             holdings = {}
-            import pandas as pd
             df_sorted = df.copy()
             df_sorted['timestamp'] = pd.to_datetime(df_sorted['timestamp'])
             df_sorted = df_sorted.sort_values('timestamp')
-            
+            del df  # 원본 즉시 해제
+
             for _, row in df_sorted.iterrows():
                 code = row['code']
                 trade_type = row['type']
                 qty = int(row['qty'])
                 price = float(row['price'])
                 timestamp_val = row['timestamp'].timestamp()
-                
+
                 if code not in holdings:
                     holdings[code] = {'qty': 0, 'total_cost': 0.0, 'buy_time': timestamp_val}
-                
+
                 if trade_type == 'BUY':
                     holdings[code]['qty'] += qty
                     holdings[code]['total_cost'] += qty * price
@@ -195,7 +207,9 @@ class ExtremeGrowthStrategy(BaseStrategy):
                         avg_price = holdings[code]['total_cost'] / holdings[code]['qty']
                         holdings[code]['qty'] = max(0, holdings[code]['qty'] - qty)
                         holdings[code]['total_cost'] = holdings[code]['qty'] * avg_price
-            
+
+            del df_sorted  # 정렬 DataFrame 해제
+
             for code, h in holdings.items():
                 if h['qty'] > 0:
                     buy_price = int(h['total_cost'] / h['qty'])
@@ -205,6 +219,7 @@ class ExtremeGrowthStrategy(BaseStrategy):
                         'buy_time': h['buy_time']
                     }
                     logging.info(f"📥 [포지션 복구] DB에서 미청산 포지션 복구 완료: {code} (수량: {h['qty']}주, 평단가: {buy_price}원)")
+            gc.collect()
         except Exception as e:
             logging.error(f"Error loading open positions from DB: {e}")
 
@@ -214,7 +229,16 @@ class ExtremeGrowthStrategy(BaseStrategy):
         self.load_open_positions_from_db()
         
         while True:
+            # 0. 날짜가 변경되었을 때 일일 데이터 초기화 (다중 영업일 지원)
+            today_str = time.strftime("%Y-%m-%d")
+            if today_str != self.current_date:
+                logging.info(f"📅 [날짜 변경] {self.current_date} -> {today_str}. 일일 상태값(시가, 당일 매매 이력)을 초기화합니다.")
+                self.current_date = today_str
+                self.daily_open_prices = {}
+                self.traded_today = set()
+
             current_time = time.strftime("%H:%M:%S")
+            is_after_market_close = current_time >= "15:15:00"
             
             # 1. 15:15 미수 동결 방지 강제 청산 체크
             if self.leverage_manager.enforce_margin_liquidation(current_time):
@@ -250,6 +274,14 @@ class ExtremeGrowthStrategy(BaseStrategy):
                 # 이미 보유한 종목은 스킵
                 if code in self.positions:
                     continue
+                
+                # 당일 한번 거래 완료한 종목은 과도한 수수료 차감을 막기 위해 스킵 (1일 1회 매매 제한)
+                if code in self.traded_today:
+                    continue
+                    
+                # 15:15 이후에는 신규 매수 금지
+                if is_after_market_close:
+                    continue
                     
                 # API를 통해 실시간 현재가 수신 (10초 캐시 적용)
                 try:
@@ -278,25 +310,23 @@ class ExtremeGrowthStrategy(BaseStrategy):
                     continue
                     
                 limit_up_price = int(current_price * 1.3)
-                # 실제 호가 데이터 없이 기본 스캘핑 신호 사용 (변동성 돌파 기반)
-                # orderbook_data는 실제 API 연동 전까지 volatility 기반 신호로 대체
-                import random
-                # 실제 가격 변동성을 기반으로 매수 신호 생성 (돌파전략: 전일 대비 0.5% 이상 상승 시)
-                if not hasattr(self, 'prev_price_cache'):
-                    self.prev_price_cache = {}
-                prev_price = self.prev_price_cache.get(code, current_price)
-                price_change_pct = (current_price - prev_price) / prev_price if prev_price > 0 else 0
-                self.prev_price_cache[code] = current_price
                 
-                # 변동성 돌파 신호: 가격이 K_VALUE(0.3) 이상 상승 중이면 매수 신호
+                # 당일 시가(Daily Open) 기준 설정
+                if code not in self.daily_open_prices:
+                    self.daily_open_prices[code] = current_price
+                    logging.info(f"📋 [{code}] 당일 시가(기준가) 설정 완료: {current_price:,}원")
+                    
+                open_price = self.daily_open_prices[code]
+                price_change_from_open = (current_price - open_price) / open_price if open_price > 0 else 0
+                
+                # 변동성 돌파 신호: 시가 대비 K_VALUE(0.3) 배율 % 이상 상승 시 매수 신호
                 k_value = self.config.get('k_value', 0.3) if self.config.get('k_value') else 0.3
-                is_breakout = price_change_pct >= k_value * 0.01  # 0.3% 이상 상승 시 돌파 신호
+                is_breakout = price_change_from_open >= k_value * 0.01  # 시가 대비 0.3% 이상 상승 시 돌파 신호
                 
                 # 뉴스는 실제 DART API 미연동 상태이므로 비활성화
                 news_target = None
 
                 # 2. 돌파 신호 확인 (뉴스 또는 변동성 돌파)
-
                 if news_target == code or is_breakout:
                     # 실제 계좌 예수금 및 총 자산 산출
                     real_cash = self.get_real_cash_balance()
@@ -326,12 +356,19 @@ class ExtremeGrowthStrategy(BaseStrategy):
                         max_allowed_budget = available_capital * self.leverage_manager.max_margin_rate
                         
                     budget = min(budget, max_allowed_budget)
+                    
+                    # 목표 수량 계산
                     target_qty = int(budget / current_price)
+                    
+                    # [결함 해결] 가용 예수금(현금)을 초과할 수 없도록 엄격한 자금 상한(Cap) 설정
+                    if target_qty * current_price > real_cash:
+                        target_qty = int(real_cash / current_price)
                     
                     if target_qty > 0:
                         expected_required_capital = target_qty * current_price
-                        logging.info(f"💰 [자금관리] 켈리 베팅 기반 진입: 목표 예산 {budget:,.0f}원 (주문: {target_qty}주, 예상 필요 자금: {expected_required_capital:,.0f}원)")
-                        # 5. 스마트 지정가 매수 라우팅 (orderbook_data 없이 시장가 주문)
+                        logging.info(f"💰 [자금관리] 켈리 베팅 기반 진입 시도: 목표 예산 {budget:,.0f}원 (주문: {target_qty}주, 예상 필요 자금: {expected_required_capital:,.0f}원, 가용 예수금: {real_cash:,.0f}원)")
+                        
+                        # 스마트 주문 라우팅
                         res = self.smart_order_routing(code, target_qty, "BUY", current_price, orderbook=None)
                         
                         # API 응답 확인: 실전/모의 API 응답 코드(rt_cd)가 '0'일 때만 포지션 등록 및 DB 기록
@@ -344,6 +381,10 @@ class ExtremeGrowthStrategy(BaseStrategy):
                             }
                             if self.db:
                                 self.db.log_trade(code, "BUY", target_qty, current_price, profit=0)
+                                
+                            # [결함 해결] 예수금 변경으로 인한 캐시 강제 무효화
+                            self._cash_balance_cache = {'value': None, 'time': 0}
+                            
                             logging.info(f"✅ [{code}] 매수 주문 접수 및 포지션 등록 성공! (수량: {target_qty}주, 진입가: {current_price:,}원)")
                         else:
                             msg = res.get('msg1', '알 수 없는 오류') if isinstance(res, dict) else '응답 없음'
@@ -360,12 +401,9 @@ class ExtremeGrowthStrategy(BaseStrategy):
                                 logging.warning(f"⚠️ [자금관리] 예산 부족으로 {code} 주문 불가 (현재가: {current_price}원, 가용 예산: {budget:,.0f}원, 예상 필요 자금: {expected_required_capital:,.0f}원). '.env' 파일의 INVESTMENT_BUDGET을 늘려주세요.")
                             self.insufficient_budget_logged.add(code)
 
-                # 6. 상한가 오버나잇 결정 (실제 호가 데이터 미연동으로 비활성화)
-                # if self.decide_limit_up_overnight(code, current_price, limit_up_price, ...):
-                #     pass
-                
                 # (루프 간 지연 방지용)
-                time.sleep(0.1) 
-                
-            # 유니버스 전체 순회 후 서버 부하 방지를 위해 2초 대기
+                time.sleep(0.1)
+
+            # 유니버스 전체 순회 후 서버 부하 방지 및 가비지 컬렉션
+            gc.collect()
             time.sleep(2.0)
