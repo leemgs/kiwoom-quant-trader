@@ -11,7 +11,7 @@ import holidays
 from dotenv import load_dotenv
 
 # .env 파일 로드
-load_dotenv()
+load_dotenv(override=True)
 
 # sys.path 설정: src 폴더를 포함하여 analytics 등을 임포트 가능하도록 함
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
@@ -74,22 +74,21 @@ def get_data(_db_path: str):
     except Exception:
         return pd.DataFrame()
 
-# ── KISBroker 싱글턴 (매 rerun마다 새 인스턴스 생성 방지) ────────────────────────
 @st.cache_resource
-def get_broker():
-    """KISBroker 인스턴스를 프로세스 수명 동안 한 번만 생성한다."""
+def get_broker(app_key, app_secret, account_no, account_suffix, is_virtual):
+    """KISBroker 인스턴스를 프로세스 수명 동안 한 번만 생성한다. 설정이 변경되면 새로 생성한다."""
     try:
         from broker.kis_api import KISBroker
         config = {
             'auth': {
-                "kis_app_key": os.getenv('KIS_APP_KEY', ''),
-                "kis_app_secret": os.getenv('KIS_APP_SECRET', ''),
-                "kis_account_no": os.getenv('KIS_ACCOUNT_NO', ''),
-                "kis_account_suffix": os.getenv('KIS_ACCOUNT_SUFFIX', '01'),
-                "kis_virtual_trading": os.getenv('KIS_VIRTUAL_TRADING', 'true').lower() == 'true',
+                "kis_app_key": app_key,
+                "kis_app_secret": app_secret,
+                "kis_account_no": account_no,
+                "kis_account_suffix": account_suffix,
+                "kis_virtual_trading": is_virtual,
             }
         }
-        if not config['auth']['kis_app_key'] or not config['auth']['kis_app_secret']:
+        if not app_key or not app_secret:
             return None
         return KISBroker(config)
     except Exception as e:
@@ -101,20 +100,27 @@ def get_broker():
 def get_account_balance():
     """KIS API 계좌 잔고 조회. 싱글턴 브로커를 사용하고 30초 캐시를 적용한다."""
     try:
-        broker = get_broker()
+        broker = get_broker(
+            os.getenv('KIS_APP_KEY', ''),
+            os.getenv('KIS_APP_SECRET', ''),
+            os.getenv('KIS_ACCOUNT_NO', ''),
+            os.getenv('KIS_ACCOUNT_SUFFIX', '01'),
+            os.getenv('KIS_VIRTUAL_TRADING', 'true').lower() == 'true'
+        )
         if broker is None:
             return "설정 필요"
         res = broker.api.fetch_balance()
-        if isinstance(res, dict) and ('output2' in res or res.get('rt_cd') == '0'):
+        if isinstance(res, dict) and res.get('rt_cd') == '0':
             output2 = res.get('output2', [])
             if output2:
                 cash = int(output2[0].get('dnca_tot_amt', 0))
                 total_assets = int(output2[0].get('tot_evlu_amt', cash))
                 return {'cash': cash, 'total_assets': total_assets}
+            else:
+                return "오류 (응답 데이터가 비어 있습니다)"
         else:
             msg = res.get('msg1', '조회 실패') if isinstance(res, dict) else '응답 오류'
             return f"오류 ({msg})"
-        return None
     except Exception as e:
         print(f"Error fetching account balance: {e}")
         return f"에러 ({str(e)})"
