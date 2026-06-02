@@ -31,24 +31,76 @@ class ExtremeGrowthStrategy(BaseStrategy):
         self.current_date = time.strftime("%Y-%m-%d")
         
     def get_real_cash_balance(self):
-        """실제 계좌 예수금(현금) 조회 (30초 캐시 적용, 오류 시 초기자본 반환)"""
+        """실제 계좌 예수금(현금) 조회 (30초 캐시 적용, 오류 시 기존 캐시 재사용 혹은 초기자본 반환)"""
         now = time.time()
         if self._cash_balance_cache['value'] is not None and now - self._cash_balance_cache['time'] < 30:
             return self._cash_balance_cache['value']
         try:
             # fetch_balance()는 output2에 계좌 종합 정보(예수금 포함)를 담아 반환
             res = self.broker.api.fetch_balance()
-            output2 = res.get('output2', [])
-            if output2 and len(output2) > 0:
-                cash = int(output2[0].get('dnca_tot_amt', 0))  # 예수금 총액
-                if cash > 0:
-                    self._cash_balance_cache = {'value': cash, 'time': now}
-                    logging.info(f"💳 [예수금 조회] 실제 계좌 예수금: {cash:,}원")
-                    return cash
+            if isinstance(res, dict) and res.get('rt_cd') == '0':
+                output2 = res.get('output2', [])
+                if output2 and len(output2) > 0:
+                    cash = int(output2[0].get('dnca_tot_amt', 0))  # 예수금 총액
+                    if cash > 0:
+                        self._cash_balance_cache = {'value': cash, 'time': now}
+                        logging.info(f"💳 [예수금 조회] 실제 계좌 예수금: {cash:,}원")
+                        return cash
+            
+            # API 응답 오류 또는 빈 응답인 경우 경고 출력 후 캐시값 재사용 시도
+            msg = res.get('msg1', '데이터가 비어 있습니다') if isinstance(res, dict) else '응답 오류'
+            if self._cash_balance_cache['value'] is not None:
+                logging.warning(f"⚠️ 계좌 예수금 조회 실패 ({msg}). 기존 캐시값({self._cash_balance_cache['value']:,}원)을 유지합니다.")
+                return self._cash_balance_cache['value']
         except Exception as e:
+            if self._cash_balance_cache['value'] is not None:
+                logging.warning(f"⚠️ 계좌 예수금 조회 에러: {e}. 기존 캐시값({self._cash_balance_cache['value']:,}원)을 유지합니다.")
+                return self._cash_balance_cache['value']
             logging.warning(f"⚠️ 계좌 예수금 조회 실패: {e}. 초기자본({self.initial_capital:,}원)으로 대체합니다.")
+        
         # 폴백: initial_capital 사용
         return self.initial_capital
+
+    def sync_positions_with_account(self):
+        """실제 증권 계좌의 잔고(보유 종목)와 메모리 포지션(self.positions) 동기화 (고스트 포지션 방지)"""
+        try:
+            res = self.broker.api.fetch_balance()
+            if isinstance(res, dict) and res.get('rt_cd') == '0':
+                output1 = res.get('output1', [])
+                actual_holdings = {}
+                for item in output1:
+                    code = item.get('pdno')  # 종목코드
+                    qty = int(item.get('hldg_qty', 0))
+                    buy_price = int(float(item.get('pchs_avg_pric', 0)))
+                    if code and qty > 0:
+                        actual_holdings[code] = {
+                            'qty': qty,
+                            'buy_price': buy_price,
+                            'buy_time': time.time()  # 실제 매수 시점은 알 수 없으므로 현재 시간으로 설정
+                        }
+                
+                # 메모리의 포지션을 실제 계좌 잔고와 비교하여 동기화
+                # 1. 실제 계좌에는 없는데 메모리에 있는 종목 (고스트 포지션) 제거
+                for code in list(self.positions.keys()):
+                    if code not in actual_holdings:
+                        logging.warning(f"⚠️ [잔고 동기화] 실제 계좌에 없는 고스트 포지션 제거: {code}")
+                        del self.positions[code]
+                
+                # 2. 실제 계좌에 있는 종목을 메모리에 등록/업데이트
+                for code, holding in actual_holdings.items():
+                    if code not in self.positions:
+                        logging.info(f"📥 [잔고 동기화] 실제 보유 종목 포지션 등록: {code} ({holding['qty']}주, 평단가: {holding['buy_price']}원)")
+                        self.positions[code] = holding
+                    else:
+                        # 수량이나 평단가가 다를 경우 업데이트
+                        if self.positions[code]['qty'] != holding['qty'] or abs(self.positions[code]['buy_price'] - holding['buy_price']) > 5:
+                            logging.info(f"🔄 [잔고 동기화] 포지션 정보 업데이트: {code} ({self.positions[code]['qty']}주 -> {holding['qty']}주, {self.positions[code]['buy_price']}원 -> {holding['buy_price']}원)")
+                            self.positions[code]['qty'] = holding['qty']
+                            self.positions[code]['buy_price'] = holding['buy_price']
+                
+                logging.info(f"✅ [잔고 동기화] 계좌 실잔고 동기화 완료 (현재 보유: {len(self.positions)}종목)")
+        except Exception as e:
+            logging.error(f"❌ [잔고 동기화] 계좌 잔고 동기화 중 오류 발생: {e}")
 
     def check_signal(self, code, df):
         """BaseStrategy의 추상 메서드 구현. 해당 전략은 run()에서 자체 로직을 사용하므로 여기서는 사용하지 않음."""
@@ -56,18 +108,10 @@ class ExtremeGrowthStrategy(BaseStrategy):
         
     def smart_order_routing(self, code, target_qty, order_type="BUY", current_price=0, orderbook=None):
         """시장가(Taker) 대신 최적의 호가에 지정가(Maker)로 깔아 수수료 및 슬리피지 방어"""
-        if not self.config.get('smart_order_routing', False):
-            # 기본 시장가 주문
-            broker_order_type = "01" if order_type == "BUY" else "02"
-            return self.broker.send_order(code, target_qty, order_type=broker_order_type, price=0)
-            
-        # 최적 지정가 계산 (단순화: 매수 시 최우선 매도호가에서 1틱 뺀 가격 등)
-        # orderbook 데이터를 활용하여 1~3호가 사이의 최적의 Maker 가격 산출
-        best_maker_price = current_price # 실제 구현시 호가 스프레드 분석
-        
-        logging.info(f"[Smart Order Routing] {order_type} 지정가 주문 대기 (슬리피지 방어): {best_maker_price}원")
-        # 지정가 매수 주문은 order_type="00"을 넘겨줍니다.
-        return self.broker.send_order(code, target_qty, price=best_maker_price, order_type="00")
+        # [강건성 개선] 초단기 스캘핑 전략에서는 체결 신속성과 고스트 포지션 방지를 위해 항상 시장가 주문("01" / "02")을 전송합니다.
+        # 지정가 주문은 미체결 상태에서 로컬 포지션만 먼저 등록되는 결함을 유발하므로 사용하지 않습니다.
+        broker_order_type = "01" if order_type == "BUY" else "02"
+        return self.broker.send_order(code, target_qty, order_type=broker_order_type, price=0)
 
     def scan_event_driven_news(self, current_news_feed):
         """DART 공시 및 뉴스 속보를 스크래핑하여 즉각 반응 (임상성공, 무상증자 등)"""
@@ -225,8 +269,11 @@ class ExtremeGrowthStrategy(BaseStrategy):
 
     def run(self):
         logging.info("🚀 [Extreme Growth 1,000% 목표 모드] 엔진 가동. 미수 풀레버리지/스캘핑 시스템 시작.")
-        # DB로부터 미청산 포지션 동기화 및 복구
+        # 1. DB로부터 미청산 포지션 동기화 및 복구
         self.load_open_positions_from_db()
+        # 2. 실제 증권 계좌 잔고와 비교하여 동기화 (고스트 포지션 제거 및 누락 포지션 추가)
+        self.sync_positions_with_account()
+        self._last_sync_time = time.time()
         
         while True:
             # 0. 날짜가 변경되었을 때 일일 데이터 초기화 (다중 영업일 지원)
@@ -236,6 +283,11 @@ class ExtremeGrowthStrategy(BaseStrategy):
                 self.current_date = today_str
                 self.daily_open_prices = {}
                 self.traded_today = set()
+
+            # 5분마다 실제 증권 계좌 잔고와 메모리 포지션 재동기화 (레이스 컨디션 및 체결 누락 보정)
+            if time.time() - self._last_sync_time > 300:
+                self.sync_positions_with_account()
+                self._last_sync_time = time.time()
 
             current_time = time.strftime("%H:%M:%S")
             is_after_market_close = current_time >= "15:15:00"
