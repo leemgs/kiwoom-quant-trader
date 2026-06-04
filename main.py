@@ -73,6 +73,10 @@ def load_config() -> dict:
             "micro_scalping_ticks": int(os.getenv('EXTREME_GROWTH_MICRO_SCALPING', '3')),
             "limit_up_overnight": os.getenv('EXTREME_GROWTH_LIMIT_UP', 'true').lower() == 'true',
             "kelly_criterion": os.getenv('EXTREME_GROWTH_KELLY', 'true').lower() == 'true',
+            # 스마트 모멘텀 진입 전략 파라미터
+            "breakout_threshold": float(os.getenv('EXTREME_GROWTH_BREAKOUT_THRESHOLD', '0.015')),
+            "momentum_ticks": int(os.getenv('EXTREME_GROWTH_MOMENTUM_TICKS', '3')),
+            "trailing_stop": float(os.getenv('EXTREME_GROWTH_TRAILING_STOP', '0.015')),
         },
     }
 

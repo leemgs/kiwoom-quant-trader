@@ -14,21 +14,35 @@ class ExtremeGrowthStrategy(BaseStrategy):
         super().__init__(broker)
         self.universe = universe
         self.config = config.get('trading', {}).get('extreme_growth', {})
-        self.stop_loss = config.get('trading', {}).get('stop_loss', 0.015)
-        self.take_profit = config.get('trading', {}).get('take_profit', 0.03)
+        self.take_profit = config.get('trading', {}).get('take_profit', 0.05)  # 익절: 5%
         self.db = db
         self.positions = {} # 현재 보유 포지션 관리
-        
+
         initial_capital = config.get('trading', {}).get('investment_budget', 10000)
         self.initial_capital = initial_capital
         self.max_trading_limit = config.get('trading', {}).get('max_trading_limit', 100000)
         self.leverage_manager = DynamicLeverageManager(initial_capital=initial_capital)
         self._cash_balance_cache = {'value': None, 'time': 0}  # 예수금 캐시 (30초)
-        
-        self.holding_timeout = int(self.config.get('holding_timeout', 1800)) # 30분 기본값
+
+        self.holding_timeout = int(self.config.get('holding_timeout', 1800))  # 30분 기본값
         self.daily_open_prices = {}
         self.traded_today = set()
         self.current_date = time.strftime("%Y-%m-%d")
+
+        # ─── 스마트 모멘텀 전략 파라미터 ──────────────────────────────────────
+        # 진입 조건: 시가 대비 상승 임계값 (기본 1.5%) — 의미 있는 상승장에서만 진입
+        self.breakout_threshold = float(self.config.get('breakout_threshold', 0.015))
+        # 진입 조건: 연속 상승 틱 수 — N번 연속 가격이 올라야 매수 신호 확정
+        self.momentum_ticks = int(self.config.get('momentum_ticks', 3))
+        # 손절 조건: 고점 대비 하락 비율 (트레일링 스탑, 기본 1.5%)
+        self.trailing_stop_pct = float(self.config.get('trailing_stop', 0.015))
+
+        # 종목별 최근 가격 이력 (deque, 모멘텀 계산용)
+        from collections import deque as _deque
+        self._deque = _deque
+        self.price_history = {}   # code -> deque[float]
+        # 종목별 포지션 보유 이후 최고가 (트레일링 스탑 기준가)
+        self.trailing_high = {}   # code -> float
         
     def get_real_cash_balance(self):
         """실제 계좌 예수금(현금) 조회 (30초 캐시 적용, 오류 시 기존 캐시 재사용 혹은 초기자본 반환)"""
@@ -82,6 +96,32 @@ class ExtremeGrowthStrategy(BaseStrategy):
                 json.dump(data, f, ensure_ascii=False, indent=4)
         except Exception as e:
             logging.warning(f"⚠️ balance_cache.json 저장 실패: {e}")
+
+    # ─── 스마트 모멘텀 진입 신호 ──────────────────────────────────────────────
+    def _update_and_check_momentum(self, code: str, current_price: float) -> bool:
+        """종목 가격 이력을 업데이트하고 N틱 연속 상승 모멘텀이 확인되면 True 반환.
+
+        Args:
+            code: 종목코드
+            current_price: 현재가
+        Returns:
+            True  — momentum_ticks 번 연속으로 가격이 올라 매수 신호 확정
+            False — 아직 데이터 부족 또는 상승 추세 미확인
+        """
+        if code not in self.price_history:
+            self.price_history[code] = self._deque(maxlen=self.momentum_ticks + 1)
+        self.price_history[code].append(current_price)
+
+        history = self.price_history[code]
+        if len(history) < self.momentum_ticks:
+            return False  # 아직 충분한 이력 없음
+
+        # 마지막 momentum_ticks 개의 가격이 모두 직전보다 높아야 상승 추세
+        prices = list(history)[-self.momentum_ticks:]
+        for i in range(1, len(prices)):
+            if prices[i] <= prices[i - 1]:
+                return False
+        return True
 
     def sync_positions_with_account(self):
         """실제 증권 계좌의 잔고(보유 종목)와 메모리 포지션(self.positions) 동기화 (고스트 포지션 방지)"""
@@ -179,14 +219,21 @@ class ExtremeGrowthStrategy(BaseStrategy):
         return False
 
     def monitor_position(self, code):
-        """보유 포지션 실시간 익절/손절 감시 (실시간 현재가 조회)"""
+        """보유 포지션 실시간 익절/트레일링스탑 감시 (실시간 현재가 조회)
+
+        [트레일링 스탑 전략]
+        - 고점 갱신 시 trailing_high[code]를 끌어올림
+        - 현재가가 고점 대비 trailing_stop_pct 이상 하락하면 청산
+          → 수익이 쌓일수록 손절선이 올라가 수익을 보호
+        - 익절(take_profit_price)에 도달하면 전량 즉시 익절
+        """
         if code not in self.positions:
             return
-            
+
         pos = self.positions[code]
         buy_price = pos['buy_price']
         qty = pos['qty']
-        
+
         # 실시간 현재가 조회 (오류 시 이전 상태 보존 및 다음 기회로 미룸)
         try:
             current_price = self.broker.get_price(code)
@@ -196,19 +243,37 @@ class ExtremeGrowthStrategy(BaseStrategy):
         except Exception as e:
             logging.warning(f"⚠️ [{code}] 포지션 실시간 가격 조회 실패: {e}")
             return
-            
-        # 익절/손절 기준 설정
-        take_profit_price = buy_price * (1 + self.take_profit) # 설정된 익절값 반영
-        stop_loss_price = buy_price * (1 - self.stop_loss) # 설정된 손절값 반영
-        
+
         profit = (current_price - buy_price) * qty
-        
+
+        # ── 1. 익절 조건: 목표가 도달 시 즉시 청산 ──────────────────────────
+        take_profit_price = int(buy_price * (1 + self.take_profit))
         if current_price >= take_profit_price:
-            self.sell_position(code, current_price, profit, reason="익절 (Take Profit)")
-        elif current_price <= stop_loss_price:
-            self.sell_position(code, current_price, profit, reason="손절 (Stop Loss)")
-        elif time.time() - pos['buy_time'] > self.holding_timeout: # 연장된 타임아웃 반영
-            self.sell_position(code, current_price, profit, reason=f"시간 경과 청산 ({self.holding_timeout}초)")
+            self.sell_position(code, current_price, profit, reason=f"익절 +{self.take_profit*100:.1f}% 달성")
+            return
+
+        # ── 2. 트레일링 스탑: 고점 추적 후 되돌림 시 청산 ──────────────────
+        # 진입 이후 최고가를 갱신하며 스탑 기준가를 자동으로 끌어올림
+        if code not in self.trailing_high:
+            self.trailing_high[code] = buy_price
+        if current_price > self.trailing_high[code]:
+            self.trailing_high[code] = current_price
+            logging.info(f"📈 [{code}] 고점 갱신: {current_price:,}원 "
+                         f"(스탑 기준가 → {int(current_price * (1 - self.trailing_stop_pct)):,}원)")
+
+        trailing_stop_price = int(self.trailing_high[code] * (1 - self.trailing_stop_pct))
+        if current_price <= trailing_stop_price:
+            peak_gain_pct = (self.trailing_high[code] - buy_price) / buy_price * 100
+            self.sell_position(
+                code, current_price, profit,
+                reason=f"트레일링 스탑 (고점 {self.trailing_high[code]:,}원에서 {self.trailing_stop_pct*100:.1f}% 하락, 최고 상승률 {peak_gain_pct:+.2f}%)"
+            )
+            return
+
+        # ── 3. 시간 초과 청산 ────────────────────────────────────────────────
+        if time.time() - pos['buy_time'] > self.holding_timeout:
+            self.sell_position(code, current_price, profit,
+                               reason=f"시간 경과 청산 ({self.holding_timeout}초)")
 
     def sell_position(self, code, current_price=50000, profit=0, reason=""):
         if code not in self.positions:
@@ -234,7 +299,11 @@ class ExtremeGrowthStrategy(BaseStrategy):
             # 예수금 캐시 즉각 무효화 및 당일 매매 종목 추가
             self._cash_balance_cache = {'value': None, 'time': 0}
             self.traded_today.add(code)
-            
+
+            # 트레일링 스탑 / 가격 이력 상태 정리
+            self.trailing_high.pop(code, None)
+            self.price_history.pop(code, None)
+
             # 포지션 삭제
             del self.positions[code]
             logging.info(f"✅ [{code}] 매도 청산 완료, 당일 재진입 제한(Traded Today) 및 DB 기록 성공!")
@@ -393,23 +462,40 @@ class ExtremeGrowthStrategy(BaseStrategy):
                     continue
                     
                 limit_up_price = int(current_price * 1.3)
-                
-                # 당일 시가(Daily Open) 기준 설정
+
+                # ── 당일 시가(Daily Open) 기준 설정 ──────────────────────────
+                # 장 초반(09:00-09:05 KST)에 처음 관측한 가격을 시가로 확정.
+                # 장 이후 봇이 시작된 경우: 처음 관측 가격 그대로 사용하되 로그 명시.
                 if code not in self.daily_open_prices:
                     self.daily_open_prices[code] = current_price
-                    logging.info(f"📋 [{code}] 당일 시가(기준가) 설정 완료: {current_price:,}원")
-                    
+                    logging.info(f"📋 [{code}] 당일 시가(기준가) 설정: {current_price:,}원")
+
                 open_price = self.daily_open_prices[code]
                 price_change_from_open = (current_price - open_price) / open_price if open_price > 0 else 0
-                
-                # 변동성 돌파 신호: 시가 대비 K_VALUE(0.3) 배율 % 이상 상승 시 매수 신호
-                k_value = self.config.get('k_value', 0.3) if self.config.get('k_value') else 0.3
-                is_breakout = price_change_from_open >= k_value * 0.01  # 시가 대비 0.3% 이상 상승 시 돌파 신호
-                
+
+                # ── [스마트 진입 신호] 2중 필터 ────────────────────────────────
+                # 조건 A: 시가 대비 breakout_threshold(기본 1.5%) 이상 상승
+                is_above_threshold = price_change_from_open >= self.breakout_threshold
+
+                # 조건 B: 최근 momentum_ticks(기본 3번) 연속으로 가격이 상승 중
+                #   - 가격 이력을 누적하며 상승 추세가 확인된 경우에만 매수 허용
+                #   - 단발성 급등(스푸핑 등) 후 즉시 하락하는 종목 필터링
+                is_rising_trend = self._update_and_check_momentum(code, current_price)
+
+                # 두 조건을 모두 충족해야 매수 신호 확정
+                is_breakout = is_above_threshold and is_rising_trend
+
+                if is_breakout:
+                    logging.info(
+                        f"🚀 [{code}] 스마트 진입 신호 확정! "
+                        f"시가 대비 +{price_change_from_open*100:.2f}% (임계값 {self.breakout_threshold*100:.1f}%), "
+                        f"{self.momentum_ticks}틱 연속 상승 확인"
+                    )
+
                 # 뉴스는 실제 DART API 미연동 상태이므로 비활성화
                 news_target = None
 
-                # 2. 돌파 신호 확인 (뉴스 또는 변동성 돌파)
+                # 2. 돌파 신호 확인 (뉴스 또는 스마트 모멘텀 돌파)
                 if news_target == code or is_breakout:
                     # 실제 계좌 예수금 및 총 자산 산출
                     real_cash = self.get_real_cash_balance()
