@@ -92,6 +92,32 @@
                 </div>
                 <div class="detail-img"><img src="img/api_validation_concept.png" alt="KIS API Validation Concept" class="feature-img"></div>
             </div>
+
+            <div class="detail-card reverse">
+                <div class="detail-text">
+                    <h2>📈 스마트 모멘텀 추세 전략 & 트레일링 스탑 (Smart Momentum & Trailing Stop)</h2>
+                    <p>극단적 초단기 스캘핑 엔진(Extreme Growth)은 더 정교한 이중 필터 진입 시그널과 동적 청산 로직으로 업그레이드되었습니다.</p>
+                    <ul>
+                        <li><strong>이중 필터 진입 시그널 ⚡</strong>: 당일 시가 대비 상승 임계값(breakout_threshold, 기본 1.5%) 돌파와 N회 연속 상승 틱(momentum_ticks, 기본 3틱) 조건을 충족할 때만 진입하여 허수 주문 및 단발성 스푸핑을 필터링합니다.</li>
+                        <li><strong>트레일링 스탑 청산 🛡️</strong>: 진입 후 가격 상승에 따라 최고가를 추적하여 스탑 기준가를 갱신하고, 최고가 대비 지정 비율(trailing_stop, 기본 1.5%) 하락 시 즉시 매도하여 수익을 안전하게 확보합니다.</li>
+                        <li><strong>시장가 강제 청산 🔒</strong>: 장 마감(15:15) 임박 시 미수금 동결을 방지하기 위해 미체결 주문 취소 후 전 종목을 시장가로 즉시 강제 청산하여 리스크를 원천 통제합니다.</li>
+                    </ul>
+                </div>
+                <div class="detail-img"><img src="img/momentum_concept.png" alt="Smart Momentum Concept" class="feature-img"></div>
+            </div>
+
+            <div class="detail-card">
+                <div class="detail-text">
+                    <h2>🛡️ KIS API 호출 최적화 및 속도 제한 방지 (API Protection & Caching)</h2>
+                    <p>한국투자증권 API의 엄격한 초당 호출 제한(Rate Limit)을 우회하고 시스템의 부하를 최소화하는 이중 보호벽입니다.</p>
+                    <ul>
+                        <li><strong>공유 잔고 파일 캐시 💳</strong>: 대시보드와 자동매매 봇이 공유하는 `data/balance_cache.json`을 통해 30초 단위로 잔고 데이터를 캐싱하여 불필요한 중복 조회를 방지합니다.</li>
+                        <li><strong>구매 불가 종목 쿨다운 ⏳</strong>: 실제 예수금보다 현재가가 높아 살 수 없는 종목에 대해 5분 단위의 경고 및 조회 쿨다운 캐시를 적용하여 로그 폭주 및 불필요한 API 호출을 차단합니다.</li>
+                        <li><strong>대시보드 리프레시 완화 ⚡</strong>: 실시간 Streamlit 대시보드의 기본 새로고침 간격을 10초에서 30초로 조정하여 API 호출 안정성을 대폭 강화하였습니다.</li>
+                    </ul>
+                </div>
+                <div class="detail-img"><img src="img/api_protection.png" alt="API Protection" class="feature-img"></div>
+            </div>
         </div>
     </main>
 
