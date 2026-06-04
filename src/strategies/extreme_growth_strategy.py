@@ -42,17 +42,23 @@ class ExtremeGrowthStrategy(BaseStrategy):
                 output2 = res.get('output2', [])
                 if output2 and len(output2) > 0:
                     cash = int(output2[0].get('dnca_tot_amt', 0))  # 예수금 총액
+                    total_assets = int(output2[0].get('tot_evlu_amt', cash))
                     if cash > 0:
                         self._cash_balance_cache = {'value': cash, 'time': now}
                         logging.info(f"💳 [예수금 조회] 실제 계좌 예수금: {cash:,}원")
+                        self.save_balance_to_file(cash, total_assets)
                         return cash
             
             # API 응답 오류 또는 빈 응답인 경우 경고 출력 후 캐시값 재사용 시도
             msg = res.get('msg1', '데이터가 비어 있습니다') if isinstance(res, dict) else '응답 오류'
+            # 실패하더라도 다음 종목 루프에서 연쇄 호출되는 것을 방지하기 위해 캐시 시간만 갱신
+            self._cash_balance_cache['time'] = now
             if self._cash_balance_cache['value'] is not None:
                 logging.warning(f"⚠️ 계좌 예수금 조회 실패 ({msg}). 기존 캐시값({self._cash_balance_cache['value']:,}원)을 유지합니다.")
                 return self._cash_balance_cache['value']
         except Exception as e:
+            # 실패하더라도 다음 종목 루프에서 연쇄 호출되는 것을 방지하기 위해 캐시 시간만 갱신
+            self._cash_balance_cache['time'] = now
             if self._cash_balance_cache['value'] is not None:
                 logging.warning(f"⚠️ 계좌 예수금 조회 에러: {e}. 기존 캐시값({self._cash_balance_cache['value']:,}원)을 유지합니다.")
                 return self._cash_balance_cache['value']
@@ -60,6 +66,22 @@ class ExtremeGrowthStrategy(BaseStrategy):
         
         # 폴백: initial_capital 사용
         return self.initial_capital
+
+    def save_balance_to_file(self, cash, total_assets):
+        """계좌 잔고 및 총자산 정보를 로컬 파일 캐시(data/balance_cache.json)에 저장 (대시보드와 공유)"""
+        try:
+            import json
+            import os
+            os.makedirs("data", exist_ok=True)
+            data = {
+                "cash": cash,
+                "total_assets": total_assets,
+                "updated_at": time.strftime("%Y-%m-%d %H:%M:%S")
+            }
+            with open("data/balance_cache.json", "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=4)
+        except Exception as e:
+            logging.warning(f"⚠️ balance_cache.json 저장 실패: {e}")
 
     def sync_positions_with_account(self):
         """실제 증권 계좌의 잔고(보유 종목)와 메모리 포지션(self.positions) 동기화 (고스트 포지션 방지)"""
@@ -79,6 +101,15 @@ class ExtremeGrowthStrategy(BaseStrategy):
                             'buy_time': time.time()  # 실제 매수 시점은 알 수 없으므로 현재 시간으로 설정
                         }
                 
+                # 대시보드 및 봇 내부 캐시 동기화를 위해 예수금 정보도 함께 저장
+                output2 = res.get('output2', [])
+                if output2 and len(output2) > 0:
+                    cash = int(output2[0].get('dnca_tot_amt', 0))
+                    total_assets = int(output2[0].get('tot_evlu_amt', cash))
+                    if cash > 0:
+                        self._cash_balance_cache = {'value': cash, 'time': time.time()}
+                        self.save_balance_to_file(cash, total_assets)
+
                 # 메모리의 포지션을 실제 계좌 잔고와 비교하여 동기화
                 # 1. 실제 계좌에는 없는데 메모리에 있는 종목 (고스트 포지션) 제거
                 for code in list(self.positions.keys()):

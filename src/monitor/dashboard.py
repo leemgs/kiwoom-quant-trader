@@ -96,9 +96,24 @@ def get_broker(app_key, app_secret, account_no, account_suffix, is_virtual):
         return None
 
 # ── 계좌 잔고 조회 (캐시 TTL=30초) ────────────────────────────────────────────
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=10)
 def get_account_balance():
-    """KIS API 계좌 잔고 조회. 싱글턴 브로커를 사용하고 30초 캐시를 적용한다."""
+    """우선 로컬 파일 캐시(data/balance_cache.json)를 읽고, 없거나 오래된 경우 KIS API 직접 조회를 수행한다."""
+    import json
+    cache_file = "data/balance_cache.json"
+    
+    # 1. 로컬 캐시 파일 조회 시도
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            updated_at = datetime.strptime(data.get("updated_at"), "%Y-%m-%d %H:%M:%S")
+            if (datetime.now() - updated_at).total_seconds() < 120:
+                return {'cash': data['cash'], 'total_assets': data['total_assets']}
+        except Exception:
+            pass
+
+    # 2. 캐시가 없거나 오래되었으면 KIS API 직접 호출
     try:
         broker = get_broker(
             os.getenv('KIS_APP_KEY', ''),
@@ -115,6 +130,19 @@ def get_account_balance():
             if output2:
                 cash = int(output2[0].get('dnca_tot_amt', 0))
                 total_assets = int(output2[0].get('tot_evlu_amt', cash))
+                
+                # 다음 조회를 위해 파일에도 저장
+                try:
+                    os.makedirs(os.path.dirname(cache_file), exist_ok=True)
+                    with open(cache_file, "w", encoding="utf-8") as f:
+                        json.dump({
+                            "cash": cash,
+                            "total_assets": total_assets,
+                            "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        }, f, ensure_ascii=False, indent=4)
+                except Exception:
+                    pass
+                    
                 return {'cash': cash, 'total_assets': total_assets}
             else:
                 return "오류 (응답 데이터가 비어 있습니다)"
