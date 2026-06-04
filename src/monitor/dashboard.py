@@ -365,7 +365,7 @@ with st.sidebar.expander(expander_title):
 </table>
 """, unsafe_allow_html=True)
 
-refresh_rate = st.sidebar.slider("새로고침 간격(초)", 5, 60, 10)
+refresh_rate = st.sidebar.slider("새로고침 간격(초)", 5, 60, 30)
 
 st.sidebar.markdown("---")
 st.sidebar.markdown(
