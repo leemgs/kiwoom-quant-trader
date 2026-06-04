@@ -455,10 +455,19 @@ class ExtremeGrowthStrategy(BaseStrategy):
                     logging.warning(f"⚠️ [{code}] KIS API 현재가 조회 에러: {e}. 해당 종목 매매를 건너뜁니다.")
                     continue
                 
-                # 실제 계좌 예수금 기반으로 1주도 살 수 없으면 스킵
+                # 실제 계좌 예수금 기반으로 1주도 살 수 없으면 스킵 (5분 쿨다운 캐시 적용)
                 real_cash = self.get_real_cash_balance()
                 if current_price > real_cash:
-                    logging.warning(f"⚠️ [{code}] 현재가({current_price:,}원)가 실제 예수금({real_cash:,}원)보다 높아 매수 불가. (종목 제외됨)")
+                    # 같은 종목에 대해 5분에 1회만 경고 (로그 스팸 및 API 과부하 방지)
+                    if not hasattr(self, '_unaffordable_logged'):
+                        self._unaffordable_logged = {}
+                    last_warn = self._unaffordable_logged.get(code, 0)
+                    if time.time() - last_warn > 300:  # 5분 쿨다운
+                        logging.warning(
+                            f"⚠️ [{code}] 현재가({current_price:,}원)가 실제 예수금({real_cash:,}원)보다 높아 "
+                            f"매수 불가. (5분간 재확인 생략)"
+                        )
+                        self._unaffordable_logged[code] = time.time()
                     continue
                     
                 limit_up_price = int(current_price * 1.3)
