@@ -32,10 +32,16 @@ class ExtremeGrowthStrategy(BaseStrategy):
         # ─── 스마트 모멘텀 전략 파라미터 ──────────────────────────────────────
         # 진입 조건: 시가 대비 상승 임계값 (기본 1.5%) — 의미 있는 상승장에서만 진입
         self.breakout_threshold = float(self.config.get('breakout_threshold', 0.015))
+        # 진입 조건: 시가 대비 최대 상승 제한값 (추격 매수 및 상단 꼭대기 물림 방지, 기본 7.0%)
+        self.max_breakout_threshold = float(self.config.get('max_breakout_threshold', 0.07))
         # 진입 조건: 연속 상승 틱 수 — N번 연속 가격이 올라야 매수 신호 확정
         self.momentum_ticks = int(self.config.get('momentum_ticks', 3))
+        # 손절 비율 (전체 설정의 trading section에서 읽어옴, 기본값 1.5%)
+        self.stop_loss = float(config.get('trading', {}).get('stop_loss', 0.015))
         # 손절 조건: 고점 대비 하락 비율 (트레일링 스탑, 기본 1.5%)
         self.trailing_stop_pct = float(self.config.get('trailing_stop', 0.015))
+        # 트레일링 스탑 활성화 임계값 (기본값은 익절 비율의 30% 또는 1.0% 중 작은 값)
+        self.trailing_stop_activation = float(self.config.get('trailing_activation', min(0.01, self.take_profit * 0.3)))
         # 현재가 캐시 유효시간(초). 모멘텀 확인 반응성과 API 부하의 균형 (기본 5초)
         self.price_cache_ttl = int(self.config.get('price_cache_ttl', 5))
 
@@ -260,7 +266,13 @@ class ExtremeGrowthStrategy(BaseStrategy):
             self.sell_position(code, current_price, profit, reason=f"익절 +{self.take_profit*100:.1f}% 달성")
             return
 
-        # ── 2. 트레일링 스탑: 고점 추적 후 되돌림 시 청산 ──────────────────
+        # ── 2. 손절 조건: 손절가 도달 시 즉시 청산 ──────────────────────────
+        stop_loss_price = int(buy_price * (1 - self.stop_loss))
+        if current_price <= stop_loss_price:
+            self.sell_position(code, current_price, profit, reason=f"손절 -{self.stop_loss*100:.1f}% 도달")
+            return
+
+        # ── 3. 트레일링 스탑: 고점 추적 후 되돌림 시 청산 ──────────────────
         # 진입 이후 최고가를 갱신하며 스탑 기준가를 자동으로 끌어올림
         if code not in self.trailing_high:
             self.trailing_high[code] = buy_price
@@ -269,16 +281,19 @@ class ExtremeGrowthStrategy(BaseStrategy):
             logging.info(f"📈 [{code}] 고점 갱신: {current_price:,}원 "
                          f"(스탑 기준가 → {int(current_price * (1 - self.trailing_stop_pct)):,}원)")
 
-        trailing_stop_price = int(self.trailing_high[code] * (1 - self.trailing_stop_pct))
-        if current_price <= trailing_stop_price:
-            peak_gain_pct = (self.trailing_high[code] - buy_price) / buy_price * 100
-            self.sell_position(
-                code, current_price, profit,
-                reason=f"트레일링 스탑 (고점 {self.trailing_high[code]:,}원에서 {self.trailing_stop_pct*100:.1f}% 하락, 최고 상승률 {peak_gain_pct:+.2f}%)"
-            )
-            return
+        # 트레일링 스탑은 고점이 '진입가 + 활성화 임계값' 이상 도달했을 때만 작동합니다.
+        activation_price = buy_price * (1 + self.trailing_stop_activation)
+        if self.trailing_high[code] >= activation_price:
+            trailing_stop_price = int(self.trailing_high[code] * (1 - self.trailing_stop_pct))
+            if current_price <= trailing_stop_price:
+                peak_gain_pct = (self.trailing_high[code] - buy_price) / buy_price * 100
+                self.sell_position(
+                    code, current_price, profit,
+                    reason=f"트레일링 스탑 (고점 {self.trailing_high[code]:,}원에서 {self.trailing_stop_pct*100:.1f}% 하락, 최고 상승률 {peak_gain_pct:+.2f}%)"
+                )
+                return
 
-        # ── 3. 시간 초과 청산 ────────────────────────────────────────────────
+        # ── 4. 시간 초과 청산 ────────────────────────────────────────────────
         if time.time() - pos['buy_time'] > self.holding_timeout:
             self.sell_position(code, current_price, profit,
                                reason=f"시간 경과 청산 ({self.holding_timeout}초)")
@@ -499,9 +514,9 @@ class ExtremeGrowthStrategy(BaseStrategy):
                 open_price = self.daily_open_prices[code]
                 price_change_from_open = (current_price - open_price) / open_price if open_price > 0 else 0
 
-                # ── [스마트 진입 신호] 2중 필터 ────────────────────────────────
-                # 조건 A: 시가 대비 breakout_threshold(기본 1.5%) 이상 상승
-                is_above_threshold = price_change_from_open >= self.breakout_threshold
+                # ── [스마트 진입 신호] 3중 필터 ────────────────────────────────
+                # 조건 A: 시가 대비 breakout_threshold 이상 상승 및 max_breakout_threshold 이하 (과추격 꼭대기 물림 방지)
+                is_above_threshold = self.breakout_threshold <= price_change_from_open <= self.max_breakout_threshold
 
                 # 조건 B: 최근 momentum_ticks(기본 3번) '신선한' 시세가 연속 상승 중
                 #   ⚠️ 수정: 캐시 중복이 아닌, 실제로 새로 조회된 시세일 때만 기록하여
@@ -510,13 +525,13 @@ class ExtremeGrowthStrategy(BaseStrategy):
                     self._record_price(code, current_price)
                 is_rising_trend = self._check_momentum(code)
 
-                # 두 조건을 모두 충족해야 매수 신호 확정
+                # 모든 조건을 충족해야 매수 신호 확정
                 is_breakout = is_above_threshold and is_rising_trend
 
                 if is_breakout:
                     logging.info(
                         f"🚀 [{code}] 스마트 진입 신호 확정! "
-                        f"시가 대비 +{price_change_from_open*100:.2f}% (임계값 {self.breakout_threshold*100:.1f}%), "
+                        f"시가 대비 +{price_change_from_open*100:.2f}% (진입범위: {self.breakout_threshold*100:.1f}% ~ {self.max_breakout_threshold*100:.1f}%), "
                         f"{self.momentum_ticks}틱 연속 상승 확인"
                     )
 
@@ -557,9 +572,12 @@ class ExtremeGrowthStrategy(BaseStrategy):
                     # 목표 수량 계산
                     target_qty = int(budget / current_price)
                     
-                    # [결함 해결] 가용 예수금(현금)을 초과할 수 없도록 엄격한 자금 상한(Cap) 설정
-                    if target_qty * current_price > real_cash:
-                        target_qty = int(real_cash / current_price)
+                    # [결함 해결] KIS 실전 시장가 주문 시 증권사에서 상한가(+30%) 기준으로 증거금을 심사하므로,
+                    # 가용 예수금 대비 상한가 기준 수량으로 안전 마진(1.35배)을 적용하여 엄격한 자금 상한(Cap)을 설정합니다.
+                    # 이를 통해 KIS API "주문가능금액을 초과 했습니다" 에러를 예방합니다.
+                    max_possible_qty = int(real_cash / (current_price * 1.35))
+                    if target_qty > max_possible_qty:
+                        target_qty = max_possible_qty
                     
                     if target_qty > 0:
                         expected_required_capital = target_qty * current_price
