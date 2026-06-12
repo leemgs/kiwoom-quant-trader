@@ -1,10 +1,10 @@
 # KIS-based Stock Quant Trader (Korea Investment KIS API 🚀)
 
-> 🎯 **목표: "지정한 금액으로 지정한 기간 동안 운영 후, 지정한 금액의 수익을 얻기 위한 것입니다."**
+> 🎯 **목표: "지정한 금액으로 지정한 기간 동안 운영 후, 지정한 금액의 수익을 실현하기 위한 시스템입니다."**
 >
 > **한국투자증권 KIS API 기반 크로스플랫폼(Ubuntu/Windows/macOS) 자동매매 프레임워크**
 >
-> 🌐 **공식 가이드 웹사이트**: [docs/index.html](docs/index.html) (브라우저로 열기)
+> 🌐 **공식 가이드 웹사이트**: [docs/index.html](docs/index.html) (브라우저로 열기) 
 
 ## 🌌 프로젝트 명칭 및 철학 (Naming & Philosophy)
 
