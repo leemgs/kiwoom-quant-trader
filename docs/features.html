@@ -1,16 +1,21 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>주요기능 - Stock Quant Trader</title>
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Outfit:wght@400;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Outfit:wght@400;700&display=swap"
+        rel="stylesheet">
 </head>
+
 <body>
     <header id="main-header">
         <nav class="container">
-            <div class="logo"><a href="index.html" style="text-decoration:none; color:inherit;">Stock Quant <span>Trader</span></a></div>
+            <div class="logo"><a href="index.html" style="text-decoration:none; color:inherit;">Stock Quant
+                    <span>Trader</span></a></div>
             <ul class="nav-links">
                 <li><a href="features.html" class="active">주요기능</a></li>
                 <li><a href="high_profit.html">핵심가이드</a></li>
@@ -38,7 +43,8 @@
                         <li>단순 차트가 놓치는 재료(Material) 기반의 선제적 대응</li>
                     </ul>
                 </div>
-                <div class="detail-img"><img src="img/ai_analysis_concept.png" alt="AI Sentiment Analysis Concept" class="feature-img"></div>
+                <div class="detail-img"><img src="img/ai_analysis_concept.png" alt="AI Sentiment Analysis Concept"
+                        class="feature-img"></div>
             </div>
 
             <div class="detail-card reverse">
@@ -51,7 +57,8 @@
                         <li><strong>추세 추종</strong>: 대세 상승장에 올라타는 골든크로스 전략</li>
                     </ul>
                 </div>
-                <div class="detail-img"><img src="img/strategy_ensemble_graph.png" alt="Strategy Ensemble Graph" class="feature-img"></div>
+                <div class="detail-img"><img src="img/strategy_ensemble_graph.png" alt="Strategy Ensemble Graph"
+                        class="feature-img"></div>
             </div>
 
             <div class="detail-card">
@@ -64,7 +71,8 @@
                         <li>폭락장에서의 비자발적 손실을 원천 차단</li>
                     </ul>
                 </div>
-                <div class="detail-img"><img src="img/global_market_dashboard.png" alt="Global Market Dashboard" class="feature-img"></div>
+                <div class="detail-img"><img src="img/global_market_dashboard.png" alt="Global Market Dashboard"
+                        class="feature-img"></div>
             </div>
 
             <div class="detail-card reverse">
@@ -74,10 +82,12 @@
                     <ul>
                         <li><strong>교차 마켓 거래</strong>: 국내 티커(UNIVERSE)와 미국 티커(US_UNIVERSE) 유니버스를 활성 시장 상황에 맞춰 동적 전환</li>
                         <li><strong>현지 시간 자동 계산</strong>: 미국 동부 시각(EST/EDT) 변환을 통한 정규장 거래 시간대(09:30 - 16:00 ET) 감지</li>
-                        <li><strong>휴일 자동 감지</strong>: 한국(KR) 및 미국(US) 국가 공휴일을 자동으로 파악하여 불필요한 거래 시도 차단 및 5분 단위 저전력 대기모드 진입</li>
+                        <li><strong>휴일 자동 감지</strong>: 한국(KR) 및 미국(US) 국가 공휴일을 자동으로 파악하여 불필요한 거래 시도 차단 및 5분 단위 저전력 대기모드
+                            진입</li>
                     </ul>
                 </div>
-                <div class="detail-img"><img src="img/holiday_checking_preview.png" alt="Dual Market & Holiday Check Preview" class="feature-img"></div>
+                <div class="detail-img"><img src="img/holiday_checking_preview.png"
+                        alt="Dual Market & Holiday Check Preview" class="feature-img"></div>
             </div>
 
             <div class="detail-card">
@@ -85,12 +95,16 @@
                     <h2>⚡ 스마트 지정가 주문 & 실시간 KIS 시세 API 검증 엔진 (Smart Routing & Zero-Ghost Trades)</h2>
                     <p>실제 증권 계좌 자산과의 오차 및 슬리피지를 원천 차단하는 초정밀 실전 자동매매 코어 엔진입니다.</p>
                     <ul>
-                        <li><strong>Zero-Ghost Trades 🛡️</strong>: KIS Open API 주문 처리 응답코드(rt_cd == '0')를 철저히 검증하여, 실제 체결/접수 완료된 거래만 포지션으로 등록하고 SQLite DB에 기록해 허위 기록 발생을 원천 차단</li>
-                        <li><strong>실시간 KIS 시세 감시 📊</strong>: 보유 포지션 감시 시 난수 시뮬레이션을 배제하고 KIS API 실시간 현재가 조회를 통해 실제 시장 가격 기준 정밀 익절(+3.0%) 및 손절(-1.5%) 집행</li>
-                        <li><strong>스마트 지정가 Maker 주문 ⚡</strong>: Mojito KIS API의 지정가 매수/매도 API 매칭 인자(symbol, price, quantity 순)를 완벽히 연동하여 실제 호가 슬리피지 방지 및 Maker 수수료 혜택 제공</li>
+                        <li><strong>Zero-Ghost Trades 🛡️</strong>: KIS Open API 주문 처리 응답코드(rt_cd == '0')를 철저히 검증하여, 실제
+                            체결/접수 완료된 거래만 포지션으로 등록하고 SQLite DB에 기록해 허위 기록 발생을 원천 차단</li>
+                        <li><strong>실시간 KIS 시세 감시 📊</strong>: 보유 포지션 감시 시 난수 시뮬레이션을 배제하고 KIS API 실시간 현재가 조회를 통해 실제 시장
+                            가격 기준 정밀 익절(+3.0%) 및 손절(-1.5%) 집행</li>
+                        <li><strong>스마트 지정가 Maker 주문 ⚡</strong>: Mojito KIS API의 지정가 매수/매도 API 매칭 인자(symbol, price,
+                            quantity 순)를 완벽히 연동하여 실제 호가 슬리피지 방지 및 Maker 수수료 혜택 제공</li>
                     </ul>
                 </div>
-                <div class="detail-img"><img src="img/api_validation_concept.png" alt="KIS API Validation Concept" class="feature-img"></div>
+                <div class="detail-img"><img src="img/api_validation_concept.png" alt="KIS API Validation Concept"
+                        class="feature-img"></div>
             </div>
 
             <div class="detail-card reverse">
@@ -98,12 +112,16 @@
                     <h2>📈 스마트 모멘텀 추세 전략 & 트레일링 스탑 (Smart Momentum & Trailing Stop)</h2>
                     <p>극단적 초단기 스캘핑 엔진(Extreme Growth)은 더 정교한 이중 필터 진입 시그널과 동적 청산 로직으로 업그레이드되었습니다.</p>
                     <ul>
-                        <li><strong>이중 필터 진입 시그널 ⚡</strong>: 당일 시가 대비 상승 임계값(breakout_threshold, 기본 1.5%) 돌파와 N회 연속 상승 틱(momentum_ticks, 기본 3틱) 조건을 충족할 때만 진입하여 허수 주문 및 단발성 스푸핑을 필터링합니다.</li>
-                        <li><strong>트레일링 스탑 청산 🛡️</strong>: 진입 후 가격 상승에 따라 최고가를 추적하여 스탑 기준가를 갱신하고, 최고가 대비 지정 비율(trailing_stop, 기본 1.5%) 하락 시 즉시 매도하여 수익을 안전하게 확보합니다.</li>
-                        <li><strong>시장가 강제 청산 🔒</strong>: 장 마감(15:15) 임박 시 미수금 동결을 방지하기 위해 미체결 주문 취소 후 전 종목을 시장가로 즉시 강제 청산하여 리스크를 원천 통제합니다.</li>
+                        <li><strong>이중 필터 진입 시그널 ⚡</strong>: 당일 시가 대비 상승 임계값(breakout_threshold, 기본 1.5%) 돌파와 N회 연속 상승
+                            틱(momentum_ticks, 기본 3틱) 조건을 충족할 때만 진입하여 허수 주문 및 단발성 스푸핑을 필터링합니다.</li>
+                        <li><strong>트레일링 스탑 청산 🛡️</strong>: 진입 후 가격 상승에 따라 최고가를 추적하여 스탑 기준가를 갱신하고, 최고가 대비 지정
+                            비율(trailing_stop, 기본 1.5%) 하락 시 즉시 매도하여 수익을 안전하게 확보합니다.</li>
+                        <li><strong>시장가 강제 청산 🔒</strong>: 장 마감(15:15) 임박 시 미수금 동결을 방지하기 위해 미체결 주문 취소 후 전 종목을 시장가로 즉시 강제
+                            청산하여 리스크를 원천 통제합니다.</li>
                     </ul>
                 </div>
-                <div class="detail-img"><img src="img/momentum_concept.png" alt="Smart Momentum Concept" class="feature-img"></div>
+                <div class="detail-img"><img src="img/momentum_concept.png" alt="Smart Momentum Concept"
+                        class="feature-img"></div>
             </div>
 
             <div class="detail-card">
@@ -111,12 +129,16 @@
                     <h2>🛡️ KIS API 호출 최적화 및 속도 제한 방지 (API Protection & Caching)</h2>
                     <p>한국투자증권 API의 엄격한 초당 호출 제한(Rate Limit)을 우회하고 시스템의 부하를 최소화하는 이중 보호벽입니다.</p>
                     <ul>
-                        <li><strong>공유 잔고 파일 캐시 💳</strong>: 대시보드와 자동매매 봇이 공유하는 `data/balance_cache.json`을 통해 30초 단위로 잔고 데이터를 캐싱하여 불필요한 중복 조회를 방지합니다.</li>
-                        <li><strong>구매 불가 종목 쿨다운 ⏳</strong>: 실제 예수금보다 현재가가 높아 살 수 없는 종목에 대해 5분 단위의 경고 및 조회 쿨다운 캐시를 적용하여 로그 폭주 및 불필요한 API 호출을 차단합니다.</li>
-                        <li><strong>대시보드 리프레시 완화 ⚡</strong>: 실시간 Streamlit 대시보드의 기본 새로고침 간격을 10초에서 30초로 조정하여 API 호출 안정성을 대폭 강화하였습니다.</li>
+                        <li><strong>공유 잔고 파일 캐시 💳</strong>: 대시보드와 자동매매 봇이 공유하는 `data/balance_cache.json`을 통해 30초 단위로 잔고
+                            데이터를 캐싱하여 불필요한 중복 조회를 방지합니다.</li>
+                        <li><strong>구매 불가 종목 쿨다운 ⏳</strong>: 실제 예수금보다 현재가가 높아 살 수 없는 종목에 대해 5분 단위의 경고 및 조회 쿨다운 캐시를 적용하여
+                            로그 폭주 및 불필요한 API 호출을 차단합니다.</li>
+                        <li><strong>대시보드 리프레시 완화 ⚡</strong>: 실시간 Streamlit 대시보드의 기본 새로고침 간격을 10초에서 30초로 조정하여 API 호출 안정성을
+                            대폭 강화하였습니다.</li>
                     </ul>
                 </div>
-                <div class="detail-img"><img src="img/api_protection.png" alt="API Protection" class="feature-img"></div>
+                <div class="detail-img"><img src="img/api_protection.png" alt="API Protection" class="feature-img">
+                </div>
             </div>
         </div>
     </main>
@@ -124,9 +146,11 @@
     <footer id="main-footer">
         <div class="container">
             <p>&copy; 2026 Stock Quant Trader. 모든 권리 보유.</p>
-            <p class="disclaimer" style="margin-top:1rem; font-size:0.85rem; color:var(--text-muted);">⚠️ <strong>면책 조항:</strong> 본 소프트웨어는 특정 수익을 보장하지 않으며, 투자로 인한 막대한 손실과 법적 책임은 전적으로 사용자 본인에게 있습니다.</p>
+            <p class="disclaimer" style="margin-top:1rem; font-size:0.85rem; color:var(--text-muted);">⚠️ <strong>면책
+                    조항:</strong> 본 소프트웨어는 특정 수익을 보장하지 않으며, 투자로 인한 막대한 손실과 법적 책임은 전적으로 사용자 본인에게 있습니다.</p>
         </div>
     </footer>
-<script src="script.js"></script>
+    <script src="script.js"></script>
 </body>
+
 </html>

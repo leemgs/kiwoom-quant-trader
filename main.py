@@ -77,6 +77,9 @@ def load_config() -> dict:
             "breakout_threshold": float(os.getenv('EXTREME_GROWTH_BREAKOUT_THRESHOLD', '0.015')),
             "momentum_ticks": int(os.getenv('EXTREME_GROWTH_MOMENTUM_TICKS', '3')),
             "trailing_stop": float(os.getenv('EXTREME_GROWTH_TRAILING_STOP', '0.015')),
+            # 안정성/반응성 파라미터
+            "price_cache_ttl": int(os.getenv('EXTREME_GROWTH_PRICE_CACHE_TTL', '5')),
+            "holding_timeout": int(os.getenv('EXTREME_GROWTH_HOLDING_TIMEOUT', '1800')),
         },
     }
 

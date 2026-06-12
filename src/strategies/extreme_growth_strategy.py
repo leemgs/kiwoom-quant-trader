@@ -36,6 +36,8 @@ class ExtremeGrowthStrategy(BaseStrategy):
         self.momentum_ticks = int(self.config.get('momentum_ticks', 3))
         # 손절 조건: 고점 대비 하락 비율 (트레일링 스탑, 기본 1.5%)
         self.trailing_stop_pct = float(self.config.get('trailing_stop', 0.015))
+        # 현재가 캐시 유효시간(초). 모멘텀 확인 반응성과 API 부하의 균형 (기본 5초)
+        self.price_cache_ttl = int(self.config.get('price_cache_ttl', 5))
 
         # 종목별 최근 가격 이력 (deque, 모멘텀 계산용)
         from collections import deque as _deque
@@ -98,30 +100,36 @@ class ExtremeGrowthStrategy(BaseStrategy):
             logging.warning(f"⚠️ balance_cache.json 저장 실패: {e}")
 
     # ─── 스마트 모멘텀 진입 신호 ──────────────────────────────────────────────
-    def _update_and_check_momentum(self, code: str, current_price: float) -> bool:
-        """종목 가격 이력을 업데이트하고 N틱 연속 상승 모멘텀이 확인되면 True 반환.
+    def _record_price(self, code: str, price: float) -> None:
+        """[신선한 시세일 때만 호출] 종목 가격 이력에 한 틱 기록.
 
-        Args:
-            code: 종목코드
-            current_price: 현재가
-        Returns:
-            True  — momentum_ticks 번 연속으로 가격이 올라 매수 신호 확정
-            False — 아직 데이터 부족 또는 상승 추세 미확인
+        ⚠️ 핵심 수정: 과거에는 매 루프마다 '캐시된 동일 가격'을 모멘텀 이력에
+        반복 누적하여 연속값이 같아져 상승 추세가 사실상 영원히 확정되지
+        않았다. 이제 가격이 실제로 새로 조회된 경우(캐시 미스)에만 기록한다.
         """
         if code not in self.price_history:
             self.price_history[code] = self._deque(maxlen=self.momentum_ticks + 1)
-        self.price_history[code].append(current_price)
+        self.price_history[code].append(price)
 
-        history = self.price_history[code]
-        if len(history) < self.momentum_ticks:
-            return False  # 아직 충분한 이력 없음
-
-        # 마지막 momentum_ticks 개의 가격이 모두 직전보다 높아야 상승 추세
+    def _check_momentum(self, code: str) -> bool:
+        """최근 momentum_ticks 개의 신선한 시세가 모두 직전보다 높으면 True."""
+        history = self.price_history.get(code)
+        if not history or len(history) < self.momentum_ticks:
+            return False
         prices = list(history)[-self.momentum_ticks:]
         for i in range(1, len(prices)):
             if prices[i] <= prices[i - 1]:
                 return False
         return True
+
+    def _update_and_check_momentum(self, code: str, current_price: float) -> bool:
+        """(하위 호환 유지용) 기록 후 즉시 모멘텀을 확인한다.
+
+        ⚠️ run()에서는 캐시 중복 누적을 막기 위해 _record_price(신선한 시세 한정)
+        와 _check_momentum을 분리 호출한다. 이 메서드는 직접 호출하지 않는다.
+        """
+        self._record_price(code, current_price)
+        return self._check_momentum(code)
 
     def sync_positions_with_account(self):
         """실제 증권 계좌의 잔고(보유 종목)와 메모리 포지션(self.positions) 동기화 (고스트 포지션 방지)"""
@@ -237,8 +245,8 @@ class ExtremeGrowthStrategy(BaseStrategy):
         # 실시간 현재가 조회 (오류 시 이전 상태 보존 및 다음 기회로 미룸)
         try:
             current_price = self.broker.get_price(code)
-            if current_price <= 0:
-                raise ValueError("현재가가 0원 이하입니다.")
+            if not current_price or current_price <= 0:
+                raise ValueError("현재가 조회 실패 또는 0원 이하")
             current_price = int(current_price)
         except Exception as e:
             logging.warning(f"⚠️ [{code}] 포지션 실시간 가격 조회 실패: {e}")
@@ -407,9 +415,10 @@ class ExtremeGrowthStrategy(BaseStrategy):
                     # 보유한 모든 포지션 강제 청산 (시장가)
                     for code in list(self.positions.keys()):
                         try:
-                            # 시장가 매도를 위한 현재가 로드
-                            current_price = self.broker.get_price(code) if hasattr(self.broker, 'get_price') else 50000
+                            # 시장가 매도를 위한 현재가 로드 (조회 실패 시 평단가로 폴백 — 시장가 청산은 그대로 진행)
                             pos = self.positions[code]
+                            cp = self.broker.get_price(code) if hasattr(self.broker, 'get_price') else None
+                            current_price = int(cp) if cp and cp > 0 else pos['buy_price']
                             profit = (current_price - pos['buy_price']) * pos['qty']
                             self.sell_position(code, current_price=current_price, profit=profit, reason="장 마감 강제 청산")
                         except Exception as e:
@@ -435,24 +444,30 @@ class ExtremeGrowthStrategy(BaseStrategy):
                 if is_after_market_close:
                     continue
                     
-                # API를 통해 실시간 현재가 수신 (10초 캐시 적용)
+                # API를 통해 실시간 시세 수신 (price_cache_ttl초 캐시 적용)
+                price_refreshed = False
                 try:
                     if not hasattr(self, 'price_cache'):
                         self.price_cache = {}
-                    
-                    if code not in self.price_cache or time.time() - self.price_cache[code]['time'] > 10:
-                        real_prpr = self.broker.get_price(code)
-                        if real_prpr and real_prpr > 0:
+
+                    if code not in self.price_cache or time.time() - self.price_cache[code]['time'] > self.price_cache_ttl:
+                        quote = self.broker.get_quote(code)
+                        if quote and quote.get('price', 0) > 0:
                             self.price_cache[code] = {
-                                'price': int(real_prpr),
+                                'price': int(quote['price']),
+                                'open': int(quote.get('open') or quote['price']),
+                                'change_pct': float(quote.get('change_pct', 0.0)),
                                 'time': time.time()
                             }
+                            price_refreshed = True  # 신선한 시세 → 모멘텀 기록 대상
                         else:
-                            logging.warning(f"⚠️ [{code}] KIS API 현재가 조회 실패 (0원 반환). 해당 종목 매매를 건너뜁니다.")
-                            continue
+                            # 조회 실패: 직전 캐시가 있으면 그대로 쓰되 모멘텀 기록은 하지 않음
+                            if code not in self.price_cache:
+                                logging.warning(f"⚠️ [{code}] KIS API 시세 조회 실패. 다음 주기로 미룹니다.")
+                                continue
                     current_price = self.price_cache[code]['price']
                 except Exception as e:
-                    logging.warning(f"⚠️ [{code}] KIS API 현재가 조회 에러: {e}. 해당 종목 매매를 건너뜁니다.")
+                    logging.warning(f"⚠️ [{code}] KIS API 시세 조회 에러: {e}. 해당 종목 매매를 건너뜁니다.")
                     continue
                 
                 # 실제 계좌 예수금 기반으로 1주도 살 수 없으면 스킵 (5분 쿨다운 캐시 적용)
@@ -473,11 +488,13 @@ class ExtremeGrowthStrategy(BaseStrategy):
                 limit_up_price = int(current_price * 1.3)
 
                 # ── 당일 시가(Daily Open) 기준 설정 ──────────────────────────
-                # 장 초반(09:00-09:05 KST)에 처음 관측한 가격을 시가로 확정.
-                # 장 이후 봇이 시작된 경우: 처음 관측 가격 그대로 사용하되 로그 명시.
+                # ⚠️ 수정: 봇이 장중에 켜져도 API가 주는 실제 당일 시가(stck_oprc)를
+                # 기준으로 삼는다. (과거에는 봇이 처음 관측한 가격을 시가로 오인하여
+                # 늦게 켜질수록 상승률 기준선이 왜곡되었다.)
                 if code not in self.daily_open_prices:
-                    self.daily_open_prices[code] = current_price
-                    logging.info(f"📋 [{code}] 당일 시가(기준가) 설정: {current_price:,}원")
+                    real_open = self.price_cache[code].get('open', current_price)
+                    self.daily_open_prices[code] = real_open if real_open > 0 else current_price
+                    logging.info(f"📋 [{code}] 당일 시가(기준가) 설정: {self.daily_open_prices[code]:,}원")
 
                 open_price = self.daily_open_prices[code]
                 price_change_from_open = (current_price - open_price) / open_price if open_price > 0 else 0
@@ -486,10 +503,12 @@ class ExtremeGrowthStrategy(BaseStrategy):
                 # 조건 A: 시가 대비 breakout_threshold(기본 1.5%) 이상 상승
                 is_above_threshold = price_change_from_open >= self.breakout_threshold
 
-                # 조건 B: 최근 momentum_ticks(기본 3번) 연속으로 가격이 상승 중
-                #   - 가격 이력을 누적하며 상승 추세가 확인된 경우에만 매수 허용
-                #   - 단발성 급등(스푸핑 등) 후 즉시 하락하는 종목 필터링
-                is_rising_trend = self._update_and_check_momentum(code, current_price)
+                # 조건 B: 최근 momentum_ticks(기본 3번) '신선한' 시세가 연속 상승 중
+                #   ⚠️ 수정: 캐시 중복이 아닌, 실제로 새로 조회된 시세일 때만 기록하여
+                #   상승 추세를 정확히 판정한다.
+                if price_refreshed:
+                    self._record_price(code, current_price)
+                is_rising_trend = self._check_momentum(code)
 
                 # 두 조건을 모두 충족해야 매수 신호 확정
                 is_breakout = is_above_threshold and is_rising_trend

@@ -1,9 +1,34 @@
 import os
+import time
+import threading
 import mojito as kis
 import logging
 import pickle
 import datetime
 import requests
+
+# =====================================================================
+# GLOBAL RATE LIMITER
+# ---------------------------------------------------------------------
+# KIS 실전 API는 초당 호출 건수 제한이 있어 짧은 시간에 몰아치면
+# "원장에서 허용 가능한 초당 거래건수를 초과하였습니다" 오류가 발생한다.
+# 모든 REST 호출 직전에 _throttle()을 호출하여 호출 간 최소 간격을 보장한다.
+# (KIS_MIN_REQUEST_INTERVAL 초, 기본 0.2초 ≈ 초당 5회로 안전하게 제한)
+# =====================================================================
+_RATE_LOCK = threading.Lock()
+_LAST_CALL = {'t': 0.0}
+_MIN_INTERVAL = float(os.getenv('KIS_MIN_REQUEST_INTERVAL', '0.2'))
+
+
+def _throttle():
+    """모든 KIS REST 호출 직전에 호출 간 최소 간격을 강제한다."""
+    with _RATE_LOCK:
+        now = time.time()
+        wait = _MIN_INTERVAL - (now - _LAST_CALL['t'])
+        if wait > 0:
+            time.sleep(wait)
+        _LAST_CALL['t'] = time.time()
+
 
 # =====================================================================
 # MONKEYPATCH: KIS API (mojito) Robustness & Self-Healing Patches
@@ -34,7 +59,8 @@ def patched_fetch_balance_domestic(self, ctx_area_fk100: str = "", ctx_area_nk10
             'CTX_AREA_FK100': ctx_area_fk100,
             'CTX_AREA_NK100': ctx_area_nk100
         }
-        res = requests.get(url, headers=headers, params=params)
+        _throttle()
+        res = requests.get(url, headers=headers, params=params, timeout=10)
         data = res.json()
         data['tr_cont'] = res.headers.get('tr_cont', res.headers.get('tr-cont', ''))
         return res, data
@@ -110,7 +136,8 @@ def patched_fetch_balance_oversea(self, ctx_area_fk200: str = "", ctx_area_nk200
             'CTX_AREA_NK200': ctx_area_nk200
         }
 
-        res = requests.get(url, headers=headers, params=params)
+        _throttle()
+        res = requests.get(url, headers=headers, params=params, timeout=10)
         data = res.json()
         data['tr_cont'] = res.headers.get('tr_cont', res.headers.get('tr-cont', ''))
         return res, data
@@ -202,10 +229,62 @@ def patched_fetch_balance(self) -> dict:
 
         return output
 
+def patched_fetch_price(self, symbol: str) -> dict:
+    """현재가 조회 (self-healing 토큰 + 레이트리밋 throttle 적용).
+
+    mojito 기본 fetch_price는 토큰 만료/레이트리밋 응답을 복구하지 못해
+    'output' 키가 없는 dict를 반환 → 상위에서 KeyError가 발생했다.
+    이 패치는 토큰 만료 시 자동 재발급 후 1회 재시도하고, 어떤 경우에도
+    'output' 키가 보장된 dict를 반환한다(없으면 빈 dict).
+    """
+    path = "uapi/domestic-stock/v1/quotations/inquire-price"
+    url = f"{self.base_url}/{path}"
+
+    def do_request():
+        _throttle()
+        headers = {
+            "content-type": "application/json",
+            "authorization": self.access_token,
+            "appKey": self.api_key,
+            "appSecret": self.api_secret,
+            "tr_id": "FHKST01010100",
+        }
+        params = {
+            "FID_COND_MRKT_DIV_CODE": "J",
+            "FID_INPUT_ISCD": symbol,
+        }
+        res = requests.get(url, headers=headers, params=params, timeout=5)
+        return res, res.json()
+
+    try:
+        res, data = do_request()
+    except Exception as e:
+        return {'rt_cd': '9', 'msg1': f'HTTP Request failed: {str(e)}', 'output': {}}
+
+    # Self-healing token refresh
+    if data.get('msg_cd') == 'EGW00123' or '만료된 token' in data.get('msg1', ''):
+        logging.warning("⚠️ KIS Token expired (price). Self-healing and re-issuing a new token...")
+        if os.path.exists("token.dat"):
+            try:
+                os.remove("token.dat")
+            except Exception:
+                pass
+        try:
+            self.issue_access_token()
+            res, data = do_request()
+        except Exception as e:
+            return {'rt_cd': '9', 'msg1': f'Token refresh failed: {str(e)}', 'output': {}}
+
+    if 'output' not in data or data.get('output') is None:
+        data['output'] = {}
+    return data
+
+
 # Apply Patches to Mojito
 kis.KoreaInvestment.fetch_balance_domestic = patched_fetch_balance_domestic
 kis.KoreaInvestment.fetch_balance_oversea = patched_fetch_balance_oversea
 kis.KoreaInvestment.fetch_balance = patched_fetch_balance
+kis.KoreaInvestment.fetch_price = patched_fetch_price
 
 class KISBroker:
     def __init__(self, config):
@@ -224,10 +303,50 @@ class KISBroker:
         )
         logging.info("KIS API Broker initialized.")
 
+    def get_quote(self, code, retries=2):
+        """현재가/시가/고저/전일대비 등 시세 dict 반환. 실패 시 None.
+
+        반환: {'price', 'open', 'high', 'low', 'change_pct'} (모두 float)
+        - 'output'이 없거나 비어 있으면(토큰/레이트리밋/일시오류) 백오프 후 재시도.
+        - 최종 실패 시 예외를 던지지 않고 None을 반환하여 호출부가 안전하게 스킵한다.
+        """
+        last_err = ''
+        for attempt in range(retries + 1):
+            res = None
+            try:
+                res = self.api.fetch_price(code)
+            except Exception as e:
+                last_err = str(e)
+
+            if isinstance(res, dict):
+                out = res.get('output') or {}
+                prpr = out.get('stck_prpr')
+                if prpr not in (None, '', '0'):
+                    try:
+                        price = float(prpr)
+                        return {
+                            'price': price,
+                            'open': float(out.get('stck_oprc') or prpr),
+                            'high': float(out.get('stck_hgpr') or prpr),
+                            'low': float(out.get('stck_lwpr') or prpr),
+                            'change_pct': float(out.get('prdy_ctrt') or 0.0),
+                        }
+                    except (TypeError, ValueError):
+                        last_err = 'price parse error'
+                else:
+                    last_err = res.get('msg1') or 'empty output'
+
+            # 레이트리밋/일시 오류: 점증 백오프 후 재시도
+            if attempt < retries:
+                time.sleep(0.3 * (attempt + 1))
+
+        logging.debug(f"[{code}] 시세 조회 최종 실패: {last_err}")
+        return None
+
     def get_price(self, code):
-        """현재가 조회"""
-        res = self.api.fetch_price(code)
-        return float(res['output']['stck_prpr'])
+        """현재가(float) 반환. 실패 시 None (호출부에서 falsy 처리)."""
+        quote = self.get_quote(code)
+        return quote['price'] if quote else None
 
     def get_balance(self):
         """계좌 잔고 조회"""
