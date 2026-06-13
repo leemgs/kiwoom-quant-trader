@@ -3,6 +3,8 @@ import numpy as np
 import pandas as pd
 import time
 import logging
+import holidays
+from datetime import datetime, timezone, timedelta
 from .base_strategy import BaseStrategy
 from core.leverage_manager import DynamicLeverageManager
 
@@ -40,8 +42,8 @@ class ExtremeGrowthStrategy(BaseStrategy):
         self.stop_loss = float(config.get('trading', {}).get('stop_loss', 0.015))
         # 손절 조건: 고점 대비 하락 비율 (트레일링 스탑, 기본 1.5%)
         self.trailing_stop_pct = float(self.config.get('trailing_stop', 0.015))
-        # 트레일링 스탑 활성화 임계값 (기본값은 익절 비율의 30% 또는 1.0% 중 작은 값)
-        self.trailing_stop_activation = float(self.config.get('trailing_activation', min(0.01, self.take_profit * 0.3)))
+        # 트레일링 스탑 활성화 임계값 (트레일링 스탑 비율보다 최소 0.5% 이상 높게 설정하여 손실 매도 차단)
+        self.trailing_stop_activation = float(self.config.get('trailing_activation', max(self.trailing_stop_pct + 0.005, self.take_profit * 0.5)))
         # 현재가 캐시 유효시간(초). 모멘텀 확인 반응성과 API 부하의 균형 (기본 5초)
         self.price_cache_ttl = int(self.config.get('price_cache_ttl', 5))
 
@@ -118,11 +120,14 @@ class ExtremeGrowthStrategy(BaseStrategy):
         self.price_history[code].append(price)
 
     def _check_momentum(self, code: str) -> bool:
-        """최근 momentum_ticks 개의 신선한 시세가 모두 직전보다 높으면 True."""
+        """최근 momentum_ticks 개의 신선한 시세가 모두 직전보다 높으면 True.
+        모멘텀 틱 수(momentum_ticks)만큼의 실제 상승 구간(Interval)을 검증하기 위해 
+        총 momentum_ticks + 1 개의 시세를 비교합니다.
+        """
         history = self.price_history.get(code)
-        if not history or len(history) < self.momentum_ticks:
+        if not history or len(history) < self.momentum_ticks + 1:
             return False
-        prices = list(history)[-self.momentum_ticks:]
+        prices = list(history)[-(self.momentum_ticks + 1):]
         for i in range(1, len(prices)):
             if prices[i] <= prices[i - 1]:
                 return False
@@ -285,7 +290,8 @@ class ExtremeGrowthStrategy(BaseStrategy):
         activation_price = buy_price * (1 + self.trailing_stop_activation)
         if self.trailing_high[code] >= activation_price:
             trailing_stop_price = int(self.trailing_high[code] * (1 - self.trailing_stop_pct))
-            if current_price <= trailing_stop_price:
+            # 안전 가드: 트레일링 스탑 매도가격이 최소 수수료/세금을 커버하는 평단가 이상(+0.2%)인 경우에만 스탑 작동
+            if current_price <= trailing_stop_price and trailing_stop_price >= buy_price * 1.002:
                 peak_gain_pct = (self.trailing_high[code] - buy_price) / buy_price * 100
                 self.sell_position(
                     code, current_price, profit,
@@ -399,8 +405,30 @@ class ExtremeGrowthStrategy(BaseStrategy):
         self._last_sync_time = time.time()
         
         while True:
+            # KST 기준 현재 날짜 및 시간 정보를 확보하여 해외 서버에서도 동일 작동 보장
+            kst = timezone(timedelta(hours=9))
+            now_kst = datetime.now(kst)
+            today_str = now_kst.strftime("%Y-%m-%d")
+            current_time = now_kst.strftime("%H:%M:%S")
+
+            # ── 한국 주식시장 영업일 및 거래 시간 검증 ───────────────────────
+            today_date = now_kst.date()
+            kr_holidays = holidays.CountryHoliday('KR')
+            is_holiday = today_date in kr_holidays or now_kst.weekday() >= 5
+            
+            # 거래 가능 시간 설정 (08:50 ~ 15:35, 마감 정산 작업 여유 포함)
+            is_market_open = not is_holiday and (
+                (now_kst.hour == 8 and now_kst.minute >= 50) or
+                (9 <= now_kst.hour < 15) or
+                (now_kst.hour == 15 and now_kst.minute <= 35)
+            )
+            
+            if not is_market_open:
+                logging.info(f"📅 [장외 대기] 현재 시각 {now_kst.strftime('%Y-%m-%d %H:%M:%S')} KST는 주말, 공휴일 또는 장외 시간입니다. 대기 모드로 진입합니다.")
+                time.sleep(60)
+                continue
+
             # 0. 날짜가 변경되었을 때 일일 데이터 초기화 (다중 영업일 지원)
-            today_str = time.strftime("%Y-%m-%d")
             if today_str != self.current_date:
                 logging.info(f"📅 [날짜 변경] {self.current_date} -> {today_str}. 일일 상태값(시가, 당일 매매 이력)을 초기화합니다.")
                 self.current_date = today_str
@@ -412,7 +440,6 @@ class ExtremeGrowthStrategy(BaseStrategy):
                 self.sync_positions_with_account()
                 self._last_sync_time = time.time()
 
-            current_time = time.strftime("%H:%M:%S")
             is_after_market_close = current_time >= "15:15:00"
             
             # 1. 15:15 미수 동결 방지 강제 청산 체크
@@ -427,7 +454,8 @@ class ExtremeGrowthStrategy(BaseStrategy):
                     except Exception as e:
                         logging.error(f"미체결 주문 취소 실패: {e}")
                     
-                    # 보유한 모든 포지션 강제 청산 (시장가)
+                # 미체결 매도가 있을 경우, 청산에 성공할 때까지 루프마다 반복 시도하여 결함 방지
+                if self.positions:
                     for code in list(self.positions.keys()):
                         try:
                             # 시장가 매도를 위한 현재가 로드 (조회 실패 시 평단가로 폴백 — 시장가 청산은 그대로 진행)
@@ -438,7 +466,6 @@ class ExtremeGrowthStrategy(BaseStrategy):
                             self.sell_position(code, current_price=current_price, profit=profit, reason="장 마감 강제 청산")
                         except Exception as e:
                             logging.error(f"{code} 장 마감 강제 청산 실패: {e}")
-                pass
             else:
                 self.liquidation_triggered = False
 
@@ -571,6 +598,11 @@ class ExtremeGrowthStrategy(BaseStrategy):
                     
                     # 목표 수량 계산
                     target_qty = int(budget / current_price)
+                    
+                    # 켈리 베팅 비율이 과도하게 낮아져 발생하는 켈리 마비(Kelly Paralysis) 방지:
+                    # 가용 예수금이 충분하여 1주를 살 수 있는 자금이 된다면 최소 1주 매수 보장
+                    if target_qty == 0 and real_cash >= current_price * 1.35:
+                        target_qty = 1
                     
                     # [결함 해결] KIS 실전 시장가 주문 시 증권사에서 상한가(+30%) 기준으로 증거금을 심사하므로,
                     # 가용 예수금 대비 상한가 기준 수량으로 안전 마진(1.35배)을 적용하여 엄격한 자금 상한(Cap)을 설정합니다.
