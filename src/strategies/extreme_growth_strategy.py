@@ -39,7 +39,8 @@ class ExtremeGrowthStrategy(BaseStrategy):
         # 진입 조건: 연속 상승 틱 수 — N번 연속 가격이 올라야 매수 신호 확정
         self.momentum_ticks = int(self.config.get('momentum_ticks', 3))
         # 손절 비율 (전체 설정의 trading section에서 읽어옴, 기본값 1.5%)
-        self.stop_loss = float(config.get('trading', {}).get('stop_loss', 0.015))
+        # 불필요한 노이즈 손절을 완화하기 위해 .env에 설정이 없으면 기본값 2.5%(0.025) 적용 권장
+        self.stop_loss = float(config.get('trading', {}).get('stop_loss', 0.025))
         # 손절 조건: 고점 대비 하락 비율 (트레일링 스탑, 기본 1.5%)
         self.trailing_stop_pct = float(self.config.get('trailing_stop', 0.015))
         # 트레일링 스탑 활성화 임계값 (트레일링 스탑 비율보다 최소 0.5% 이상 높게 설정하여 손실 매도 차단)
@@ -157,7 +158,8 @@ class ExtremeGrowthStrategy(BaseStrategy):
                         actual_holdings[code] = {
                             'qty': qty,
                             'buy_price': buy_price,
-                            'buy_time': time.time()  # 실제 매수 시점은 알 수 없으므로 현재 시간으로 설정
+                            'buy_time': time.time(),  # 실제 매수 시점은 알 수 없으므로 현재 시간으로 설정
+                            'is_margin': False  # 실제 계좌 잔고 동기화 시에는 기본값 현금(False)으로 간주
                         }
                 
                 # 대시보드 및 봇 내부 캐시 동기화를 위해 예수금 정보도 함께 저장
@@ -187,6 +189,9 @@ class ExtremeGrowthStrategy(BaseStrategy):
                             logging.info(f"🔄 [잔고 동기화] 포지션 정보 업데이트: {code} ({self.positions[code]['qty']}주 -> {holding['qty']}주, {self.positions[code]['buy_price']}원 -> {holding['buy_price']}원)")
                             self.positions[code]['qty'] = holding['qty']
                             self.positions[code]['buy_price'] = holding['buy_price']
+                            # 기존 포지션에 is_margin이 정의되지 않은 경우 유지
+                            if 'is_margin' not in self.positions[code]:
+                                self.positions[code]['is_margin'] = False
                 
                 logging.info(f"✅ [잔고 동기화] 계좌 실잔고 동기화 완료 (현재 보유: {len(self.positions)}종목)")
         except Exception as e:
@@ -301,8 +306,15 @@ class ExtremeGrowthStrategy(BaseStrategy):
 
         # ── 4. 시간 초과 청산 ────────────────────────────────────────────────
         if time.time() - pos['buy_time'] > self.holding_timeout:
-            self.sell_position(code, current_price, profit,
-                               reason=f"시간 경과 청산 ({self.holding_timeout}초)")
+            # 안전장치: 평단가 + 수수료/세금을 고려한 수익(평단가 +0.2% 이상) 구간일 때만 청산 진행
+            # 만약 손실 중이라면 손절선에 닿지 않는 한 청산을 보류하고 계속 들고 감
+            if current_price >= buy_price * 1.002:
+                self.sell_position(code, current_price, profit,
+                                   reason=f"시간 경과 익절 청산 ({self.holding_timeout}초, 수익권 진입)")
+            else:
+                if not pos.get('timeout_extended_logged', False):
+                    logging.info(f"⏳ [{code}] 매수 후 {self.holding_timeout}초 경과하였으나 손실 상태(현재가 {current_price:,}원 < 평단가 {buy_price:,}원)이므로 손절선 도달 전까지 보유를 연장합니다.")
+                    pos['timeout_extended_logged'] = True
 
     def sell_position(self, code, current_price=50000, profit=0, reason=""):
         if code not in self.positions:
@@ -389,7 +401,8 @@ class ExtremeGrowthStrategy(BaseStrategy):
                     self.positions[code] = {
                         'qty': h['qty'],
                         'buy_price': buy_price,
-                        'buy_time': h['buy_time']
+                        'buy_time': h['buy_time'],
+                        'is_margin': False  # DB에서 복구한 과거 포지션은 기본적으로 현금(오버나잇 가능)으로 간주
                     }
                     logging.info(f"📥 [포지션 복구] DB에서 미청산 포지션 복구 완료: {code} (수량: {h['qty']}주, 평단가: {buy_price}원)")
             gc.collect()
@@ -445,7 +458,7 @@ class ExtremeGrowthStrategy(BaseStrategy):
             # 1. 15:15 미수 동결 방지 강제 청산 체크
             if self.leverage_manager.enforce_margin_liquidation(current_time):
                 if not getattr(self, 'liquidation_triggered', False):
-                    logging.warning("⚠️ [리스크 관리] 장 마감 임박. 미체결 주문 취소 및 전 종목 강제 청산 (시장가 주문으로 변경 적용)")
+                    logging.warning("⚠️ [리스크 관리] 장 마감 임박. 미체결 주문 취소 및 미수 포지션 강제 청산 진행")
                     self.liquidation_triggered = True
                     # 미체결 주문 취소 시도
                     try:
@@ -454,18 +467,32 @@ class ExtremeGrowthStrategy(BaseStrategy):
                     except Exception as e:
                         logging.error(f"미체결 주문 취소 실패: {e}")
                     
-                # 미체결 매도가 있을 경우, 청산에 성공할 때까지 루프마다 반복 시도하여 결함 방지
+                # 보유 포지션 중 청산 대상 선별
                 if self.positions:
                     for code in list(self.positions.keys()):
                         try:
-                            # 시장가 매도를 위한 현재가 로드 (조회 실패 시 평단가로 폴백 — 시장가 청산은 그대로 진행)
                             pos = self.positions[code]
+                            is_margin = pos.get('is_margin', True) # 안전하게 기본값 미수(True)로 설정하여 강제 청산 유도
+                            
                             cp = self.broker.get_price(code) if hasattr(self.broker, 'get_price') else None
                             current_price = int(cp) if cp and cp > 0 else pos['buy_price']
                             profit = (current_price - pos['buy_price']) * pos['qty']
-                            self.sell_position(code, current_price=current_price, profit=profit, reason="장 마감 강제 청산")
+                            
+                            if is_margin:
+                                # 미수 포지션: 무조건 당일 청산
+                                logging.warning(f"⚠️ [{code}] 미수 포지션 장 마감 강제 청산 진행 (현재가: {current_price:,}원, 손익: {profit:+,}원)")
+                                self.sell_position(code, current_price=current_price, profit=profit, reason="장 마감 미수 강제 청산")
+                            else:
+                                # 현금 포지션: 수익 상태일 때만 익절 청산, 손실 상태이면 다음 날로 오버나잇
+                                if current_price >= pos['buy_price'] * 1.002:
+                                    logging.info(f"✅ [{code}] 현금 포지션 수익 상태로 장 마감 익절 청산 진행 (현재가: {current_price:,}원, 평단가: {pos['buy_price']:,}원)")
+                                    self.sell_position(code, current_price=current_price, profit=profit, reason="장 마감 현금 익절 청산")
+                                else:
+                                    if not pos.get('overnight_logged', False):
+                                        logging.info(f"💤 [{code}] 현금 포지션 손실 상태이므로 오버나잇 허용 및 강제 청산 스킵 (현재가: {current_price:,}원 < 평단가: {pos['buy_price']:,}원)")
+                                        pos['overnight_logged'] = True
                         except Exception as e:
-                            logging.error(f"{code} 장 마감 강제 청산 실패: {e}")
+                            logging.error(f"{code} 장 마감 청산 처리 실패: {e}")
             else:
                 self.liquidation_triggered = False
 
@@ -620,11 +647,15 @@ class ExtremeGrowthStrategy(BaseStrategy):
                         
                         # API 응답 확인: 실전/모의 API 응답 코드(rt_cd)가 '0'일 때만 포지션 등록 및 DB 기록
                         if isinstance(res, dict) and res.get('rt_cd') == '0':
+                            # 실제 예수금 한도 이상으로 매수했는지 판단하여 미수 여부 기록
+                            is_margin = (target_qty * current_price) > real_cash
+                            
                             # 포지션 등록 및 DB 기록
                             self.positions[code] = {
                                 'qty': target_qty,
                                 'buy_price': current_price,
-                                'buy_time': time.time()
+                                'buy_time': time.time(),
+                                'is_margin': is_margin
                             }
                             if self.db:
                                 self.db.log_trade(code, "BUY", target_qty, current_price, profit=0)
