@@ -32,6 +32,8 @@ class ExtremeGrowthStrategy(BaseStrategy):
         self.current_date = time.strftime("%Y-%m-%d")
 
         # ─── 스마트 모멘텀 전략 파라미터 ──────────────────────────────────────
+        # 신규 매수 진입 시작 시간 (장초반 9시~9시15분 사이의 가짜 돌파/고변동성 손실 차단용)
+        self.buy_start_time = self.config.get('buy_start_time', '09:15:00')
         # 진입 조건: 시가 대비 상승 임계값 (기본 1.5%) — 의미 있는 상승장에서만 진입
         self.breakout_threshold = float(self.config.get('breakout_threshold', 0.015))
         # 진입 조건: 시가 대비 최대 상승 제한값 (추격 매수 및 상단 꼭대기 물림 방지, 기본 7.0%)
@@ -509,8 +511,8 @@ class ExtremeGrowthStrategy(BaseStrategy):
                 if code in self.traded_today:
                     continue
                     
-                # 15:15 이후에는 신규 매수 금지
-                if is_after_market_close:
+                # 설정된 시작 시간 이전 또는 15:15 이후에는 신규 매수 금지
+                if current_time < self.buy_start_time or is_after_market_close:
                     continue
                     
                 # API를 통해 실시간 시세 수신 (price_cache_ttl초 캐시 적용)

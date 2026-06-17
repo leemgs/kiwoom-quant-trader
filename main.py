@@ -74,9 +74,12 @@ def load_config() -> dict:
             "limit_up_overnight": os.getenv('EXTREME_GROWTH_LIMIT_UP', 'true').lower() == 'true',
             "kelly_criterion": os.getenv('EXTREME_GROWTH_KELLY', 'true').lower() == 'true',
             # 스마트 모멘텀 진입 전략 파라미터
+            "buy_start_time": os.getenv('EXTREME_GROWTH_BUY_START_TIME', '09:15:00'),
             "breakout_threshold": float(os.getenv('EXTREME_GROWTH_BREAKOUT_THRESHOLD', '0.015')),
+            "max_breakout_threshold": float(os.getenv('EXTREME_GROWTH_MAX_BREAKOUT_THRESHOLD', '0.07')),
             "momentum_ticks": int(os.getenv('EXTREME_GROWTH_MOMENTUM_TICKS', '3')),
             "trailing_stop": float(os.getenv('EXTREME_GROWTH_TRAILING_STOP', '0.015')),
+            "trailing_activation": float(os.getenv('EXTREME_GROWTH_TRAILING_ACTIVATION', '0.02')),
             # 안정성/반응성 파라미터
             "price_cache_ttl": int(os.getenv('EXTREME_GROWTH_PRICE_CACHE_TTL', '5')),
             "holding_timeout": int(os.getenv('EXTREME_GROWTH_HOLDING_TIMEOUT', '1800')),
