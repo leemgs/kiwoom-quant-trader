@@ -40,6 +40,85 @@ db_path = "data/trading_history_mock.db" if is_virtual else "data/trading_histor
 
 BASELINE_FILE = "data/profit_baseline.txt"
 
+# ── 주식 종목명 매핑 ─────────────────────────────────────────────────────────────
+STOCK_NAMES = {
+    # 한국 주식 (UNIVERSE)
+    "035720": "카카오",
+    "004020": "현대제철",
+    "015760": "한국전력",
+    "006360": "GS건설",
+    "323410": "카카오뱅크",
+    "011200": "HMM",
+    "032640": "LG유플러스",
+    "003490": "대한항공",
+    "207940": "삼성바이오로직스",
+    "000660": "SK하이닉스",
+    "373220": "LG에너지솔루션",
+    "005380": "현대차",
+    "293490": "카카오게임즈",
+    "005930": "삼성전자",
+    "034020": "두산에너빌리티",
+    "018260": "삼성에스디에스",
+    "006400": "삼성SDI",
+    "006280": "GC녹십자",
+    "039130": "하나투어",
+    "080160": "모두투어",
+    "000270": "기아",
+    "093370": "후성",
+    "204320": "HL만도",
+    "0183J0": "TIGER미국우주테크(ETF)",
+    "042660": "한화오션",
+    "047040": "대우건설",
+    "032820": "우리기술",
+    "042700": "한미반도체",
+    "010170": "대한광통신",
+    "001440": "대한전선",
+    "229200": "KODEX코스닥150(ETF)",
+    "090710": "휴림로봇",
+    "067310": "하나마이크론",
+    
+    # 미국 주식 (US_UNIVERSE)
+    "AAPL.US": "Apple",
+    "MSFT.US": "Microsoft",
+    "GOOGL.US": "Google",
+    "TSLA.US": "Tesla",
+    "NVDA.US": "NVIDIA",
+    "AAPL": "Apple",
+    "MSFT": "Microsoft",
+    "GOOGL": "Google",
+    "TSLA": "Tesla",
+    "NVDA": "NVIDIA"
+}
+
+@st.cache_data(ttl=3600)
+def get_stock_name(code: str) -> str:
+    if not code:
+        return ""
+    code_str = str(code).strip()
+    if code_str in STOCK_NAMES:
+        return STOCK_NAMES[code_str]
+    
+    # API 동적 조회 시도 (한국 주식인 경우)
+    if code_str.isdigit() and len(code_str) == 6:
+        try:
+            broker = get_broker(
+                os.getenv('KIS_APP_KEY', ''),
+                os.getenv('KIS_APP_SECRET', ''),
+                os.getenv('KIS_ACCOUNT_NO', ''),
+                os.getenv('KIS_ACCOUNT_SUFFIX', '01'),
+                os.getenv('KIS_VIRTUAL_TRADING', 'true').lower() == 'true'
+            )
+            if broker:
+                res = broker.api.fetch_price(code_str)
+                if isinstance(res, dict) and 'output' in res:
+                    name = res['output'].get('hts_kor_isnm')
+                    if name:
+                        return name
+        except Exception:
+            pass
+            
+    return code_str
+
 # ── 유틸리티 함수 ───────────────────────────────────────────────────────────────
 def get_profit_baseline(default_value):
     if os.path.exists(BASELINE_FILE):
@@ -234,6 +313,17 @@ is_any_trading = is_kor_trading or is_us_trading
 
 # ── 데이터 로드 ─────────────────────────────────────────────────────────────────
 df = get_data(db_path)
+
+# 종목명 컬럼(name) 추가 및 배치 (Recent Trade History 출력용)
+if not df.empty and 'code' in df.columns:
+    df['name'] = df['code'].apply(get_stock_name)
+    cols = list(df.columns)
+    if 'code' in cols and 'name' in cols:
+        code_idx = cols.index('code')
+        # code 바로 옆에 name 컬럼 배치
+        cols.insert(code_idx + 1, cols.pop(cols.index('name')))
+        df = df[cols]
+
 total_profit = df['profit'].sum() if not df.empty else 0
 current_total = investment_budget + total_profit
 
