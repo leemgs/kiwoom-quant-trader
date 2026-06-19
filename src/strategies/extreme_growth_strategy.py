@@ -40,6 +40,10 @@ class ExtremeGrowthStrategy(BaseStrategy):
         self.max_breakout_threshold = float(self.config.get('max_breakout_threshold', 0.07))
         # 진입 조건: 연속 상승 틱 수 — N번 연속 가격이 올라야 매수 신호 확정
         self.momentum_ticks = int(self.config.get('momentum_ticks', 3))
+        # 진입 조건: 최소 모멘텀 상승률 (기본 0.2%)
+        self.momentum_min_pct = float(self.config.get('momentum_min_pct', 0.002))
+        # 진입 조건: 고점 대비 최대 하락 버퍼 (당일 최고가 대비 이 비율 내에 있어야 breakout으로 간주, 기본 1.0%)
+        self.breakout_high_buffer = float(self.config.get('breakout_high_buffer', 0.01))
         # 손절 비율 (전체 설정의 trading section에서 읽어옴, 기본값 1.5%)
         # 불필요한 노이즈 손절을 완화하기 위해 .env에 설정이 없으면 기본값 2.5%(0.025) 적용 권장
         self.stop_loss = float(config.get('trading', {}).get('stop_loss', 0.025))
@@ -49,6 +53,8 @@ class ExtremeGrowthStrategy(BaseStrategy):
         self.trailing_stop_activation = float(self.config.get('trailing_activation', max(self.trailing_stop_pct + 0.005, self.take_profit * 0.5)))
         # 현재가 캐시 유효시간(초). 모멘텀 확인 반응성과 API 부하의 균형 (기본 5초)
         self.price_cache_ttl = int(self.config.get('price_cache_ttl', 5))
+        # 청산 조건: 시간 초과 익절 마진 비율 (기본 1.0% 이상 시 청산)
+        self.timeout_profit_threshold = float(self.config.get('timeout_profit_threshold', 0.01))
 
         # 종목별 최근 가격 이력 (deque, 모멘텀 계산용)
         from collections import deque as _deque
@@ -123,9 +129,8 @@ class ExtremeGrowthStrategy(BaseStrategy):
         self.price_history[code].append(price)
 
     def _check_momentum(self, code: str) -> bool:
-        """최근 momentum_ticks 개의 신선한 시세가 모두 직전보다 높으면 True.
-        모멘텀 틱 수(momentum_ticks)만큼의 실제 상승 구간(Interval)을 검증하기 위해 
-        총 momentum_ticks + 1 개의 시세를 비교합니다.
+        """최근 momentum_ticks 개의 신선한 시세가 모두 직전보다 높고,
+        전체 상승률이 momentum_min_pct 이상이면 True.
         """
         history = self.price_history.get(code)
         if not history or len(history) < self.momentum_ticks + 1:
@@ -134,6 +139,11 @@ class ExtremeGrowthStrategy(BaseStrategy):
         for i in range(1, len(prices)):
             if prices[i] <= prices[i - 1]:
                 return False
+        
+        # 전체 상승률이 최소 임계값(momentum_min_pct)을 넘었는지 확인하여 미세한 호가 노이즈 필터링
+        if (prices[-1] - prices[0]) / prices[0] < self.momentum_min_pct:
+            return False
+            
         return True
 
     def _update_and_check_momentum(self, code: str, current_price: float) -> bool:
@@ -308,14 +318,15 @@ class ExtremeGrowthStrategy(BaseStrategy):
 
         # ── 4. 시간 초과 청산 ────────────────────────────────────────────────
         if time.time() - pos['buy_time'] > self.holding_timeout:
-            # 안전장치: 평단가 + 수수료/세금을 고려한 수익(평단가 +0.2% 이상) 구간일 때만 청산 진행
-            # 만약 손실 중이라면 손절선에 닿지 않는 한 청산을 보류하고 계속 들고 감
-            if current_price >= buy_price * 1.002:
+            # 안전장치: 평단가 + 수수료/세금과 적정 마진을 고려한 수익(timeout_profit_threshold 이상) 구간일 때만 청산 진행
+            # 만약 목표 수익률 미만 또는 손실 중이라면 손절선에 닿지 않는 한 청산을 보류하고 계속 들고 감
+            target_limit_price = buy_price * (1 + self.timeout_profit_threshold)
+            if current_price >= target_limit_price:
                 self.sell_position(code, current_price, profit,
-                                   reason=f"시간 경과 익절 청산 ({self.holding_timeout}초, 수익권 진입)")
+                                   reason=f"시간 경과 익절 청산 ({self.holding_timeout}초, 목표 수익률 {self.timeout_profit_threshold*100:.1f}% 충족)")
             else:
                 if not pos.get('timeout_extended_logged', False):
-                    logging.info(f"⏳ [{code}] 매수 후 {self.holding_timeout}초 경과하였으나 손실 상태(현재가 {current_price:,}원 < 평단가 {buy_price:,}원)이므로 손절선 도달 전까지 보유를 연장합니다.")
+                    logging.info(f"⏳ [{code}] 매수 후 {self.holding_timeout}초 경과하였으나 목표 수익률({self.timeout_profit_threshold*100:.1f}%) 미만(현재가 {current_price:,}원, 목표가 {int(target_limit_price):,}원)이므로 손절선 도달 전까지 보유를 연장합니다.")
                     pos['timeout_extended_logged'] = True
 
     def sell_position(self, code, current_price=50000, profit=0, reason=""):
@@ -527,6 +538,8 @@ class ExtremeGrowthStrategy(BaseStrategy):
                             self.price_cache[code] = {
                                 'price': int(quote['price']),
                                 'open': int(quote.get('open') or quote['price']),
+                                'high': int(quote.get('high') or quote['price']),
+                                'low': int(quote.get('low') or quote['price']),
                                 'change_pct': float(quote.get('change_pct', 0.0)),
                                 'time': time.time()
                             }
@@ -581,14 +594,19 @@ class ExtremeGrowthStrategy(BaseStrategy):
                     self._record_price(code, current_price)
                 is_rising_trend = self._check_momentum(code)
 
+                # 조건 C: 당일 최고가(daily_high) 대비 과도한 하락(눌림목 하락) 상태가 아닌지 확인
+                daily_high = self.price_cache[code]['high']
+                is_near_high = current_price >= daily_high * (1 - self.breakout_high_buffer)
+
                 # 모든 조건을 충족해야 매수 신호 확정
-                is_breakout = is_above_threshold and is_rising_trend
+                is_breakout = is_above_threshold and is_rising_trend and is_near_high
 
                 if is_breakout:
                     logging.info(
                         f"🚀 [{code}] 스마트 진입 신호 확정! "
                         f"시가 대비 +{price_change_from_open*100:.2f}% (진입범위: {self.breakout_threshold*100:.1f}% ~ {self.max_breakout_threshold*100:.1f}%), "
-                        f"{self.momentum_ticks}틱 연속 상승 확인"
+                        f"당일 고점({daily_high:,}원) 대비 버퍼 통과, "
+                        f"{self.momentum_ticks}틱 연속 상승 및 모멘텀 필터 통과"
                     )
 
                 # 뉴스는 실제 DART API 미연동 상태이므로 비활성화
@@ -599,10 +617,8 @@ class ExtremeGrowthStrategy(BaseStrategy):
                     # 실제 계좌 예수금 및 총 자산 산출
                     real_cash = self.get_real_cash_balance()
                     
-                    # DB 기반으로 열린 포지션들의 매수 원금을 계산
-                    open_positions_cost = self.db.get_open_positions_cost() if self.db else sum(
-                        pos['qty'] * pos['buy_price'] for pos in self.positions.values()
-                    )
+                    # 실제 메모리에 등록된 포지션들의 매수 원금 계산 (동기화된 상태가 가장 정확함)
+                    open_positions_cost = sum(pos['qty'] * pos['buy_price'] for pos in self.positions.values())
                     
                     total_assets = real_cash + open_positions_cost
                     

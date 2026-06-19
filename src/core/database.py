@@ -52,25 +52,37 @@ class TradeDatabase:
             return 0.0
 
     def get_open_positions_cost(self):
-        """현재 보유 중인 포지션의 매수 원금 합계를 SQL 집계로 계산한다.
-
-        기존 구현은 전체 거래 이력을 pandas로 로드한 뒤 Python 루프로 계산했지만,
-        여기서는 SQL 집계 쿼리만 사용하여 메모리 사용량을 대폭 줄인다.
+        """현재 보유 중인 포지션의 매수 원금 합계를 계산한다.
+        각 종목의 매매 내역을 시간순으로 추적하여 미청산 수량에 평단가를 곱한 값을 합산합니다.
         """
         try:
             with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                # BUY 총 금액 - SELL 총 금액 = 아직 보유 중인 원금 합계
-                # (완전 청산된 종목도 포함될 수 있으나 근사치로 충분히 실용적)
-                cursor.execute("""
-                    SELECT
-                        COALESCE(SUM(CASE WHEN type='BUY'  THEN qty * price ELSE 0 END), 0)
-                      - COALESCE(SUM(CASE WHEN type='SELL' THEN qty * price ELSE 0 END), 0)
-                    FROM trades
-                """)
-                row = cursor.fetchone()
-                cost = float(row[0]) if row else 0.0
-                return max(0.0, cost)
+                df = pd.read_sql("SELECT code, type, qty, price FROM trades ORDER BY timestamp ASC", conn)
+            
+            if df.empty:
+                return 0.0
+
+            holdings = {}
+            for _, row in df.iterrows():
+                code = row['code']
+                trade_type = row['type']
+                qty = int(row['qty'])
+                price = float(row['price'])
+
+                if code not in holdings:
+                    holdings[code] = {'qty': 0, 'total_cost': 0.0}
+
+                if trade_type == 'BUY':
+                    holdings[code]['qty'] += qty
+                    holdings[code]['total_cost'] += qty * price
+                elif trade_type == 'SELL':
+                    if holdings[code]['qty'] > 0:
+                        avg_price = holdings[code]['total_cost'] / holdings[code]['qty']
+                        holdings[code]['qty'] = max(0, holdings[code]['qty'] - qty)
+                        holdings[code]['total_cost'] = holdings[code]['qty'] * avg_price
+
+            total_cost = sum(h['total_cost'] for h in holdings.values() if h['qty'] > 0)
+            return float(total_cost)
         except Exception as e:
             print(f"Error calculating open positions cost: {e}")
             return 0.0
