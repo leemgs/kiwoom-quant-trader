@@ -55,6 +55,12 @@ class ExtremeGrowthStrategy(BaseStrategy):
         self.price_cache_ttl = int(self.config.get('price_cache_ttl', 5))
         # 청산 조건: 시간 초과 익절 마진 비율 (기본 1.0% 이상 시 청산)
         self.timeout_profit_threshold = float(self.config.get('timeout_profit_threshold', 0.01))
+        # 진입 조건: 최소 전일 거래량 (기본 100,000주)
+        self.min_prev_volume = int(self.config.get('min_prev_volume', 100000))
+        # 진입 조건: 최소 당일 거래량 비율 (기본 전일 거래량 대비 5%)
+        self.min_volume_ratio = float(self.config.get('min_volume_ratio', 0.05))
+        # 진입 조건: 최소 주가 제한 (기본 2,000원 이상)
+        self.min_stock_price = int(self.config.get('min_stock_price', 2000))
 
         # 종목별 최근 가격 이력 (deque, 모멘텀 계산용)
         from collections import deque as _deque
@@ -540,6 +546,8 @@ class ExtremeGrowthStrategy(BaseStrategy):
                                 'open': int(quote.get('open') or quote['price']),
                                 'high': int(quote.get('high') or quote['price']),
                                 'low': int(quote.get('low') or quote['price']),
+                                'volume': float(quote.get('volume') or 0.0),
+                                'prev_volume': float(quote.get('prev_volume') or 0.0),
                                 'change_pct': float(quote.get('change_pct', 0.0)),
                                 'time': time.time()
                             }
@@ -567,6 +575,16 @@ class ExtremeGrowthStrategy(BaseStrategy):
                             f"매수 불가. (5분간 재확인 생략)"
                         )
                         self._unaffordable_logged[code] = time.time()
+                    continue
+                    
+                # ── 신규 필터: 최소 주가 제한 (스프레드 완화) ────────────────────
+                if current_price < self.min_stock_price:
+                    continue
+
+                # ── 신규 필터: 거래량 및 유동성 검증 ────────────────────────────
+                volume = self.price_cache[code].get('volume', 0.0)
+                prev_volume = self.price_cache[code].get('prev_volume', 0.0)
+                if prev_volume < self.min_prev_volume or volume < prev_volume * self.min_volume_ratio:
                     continue
                     
                 limit_up_price = int(current_price * 1.3)

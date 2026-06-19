@@ -86,6 +86,9 @@ def load_config() -> dict:
             "price_cache_ttl": int(os.getenv('EXTREME_GROWTH_PRICE_CACHE_TTL', '5')),
             "holding_timeout": int(os.getenv('EXTREME_GROWTH_HOLDING_TIMEOUT', '1800')),
             "timeout_profit_threshold": float(os.getenv('EXTREME_GROWTH_TIMEOUT_PROFIT_THRESHOLD', '0.01')),
+            "min_prev_volume": int(os.getenv('EXTREME_GROWTH_MIN_PREV_VOLUME', '100000')),
+            "min_volume_ratio": float(os.getenv('EXTREME_GROWTH_MIN_VOLUME_RATIO', '0.05')),
+            "min_stock_price": int(os.getenv('EXTREME_GROWTH_MIN_STOCK_PRICE', '2000')),
         },
     }
 

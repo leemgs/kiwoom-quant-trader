@@ -330,6 +330,8 @@ class KISBroker:
                             'high': float(out.get('stck_hgpr') or prpr),
                             'low': float(out.get('stck_lwpr') or prpr),
                             'change_pct': float(out.get('prdy_ctrt') or 0.0),
+                            'volume': float(out.get('acml_vol') or 0.0),
+                            'prev_volume': float(out.get('prdy_vol') or 0.0),
                         }
                     except (TypeError, ValueError):
                         last_err = 'price parse error'
