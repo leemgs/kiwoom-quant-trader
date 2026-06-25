@@ -89,6 +89,7 @@ def load_config() -> dict:
             "min_prev_volume": int(os.getenv('EXTREME_GROWTH_MIN_PREV_VOLUME', '100000')),
             "min_volume_ratio": float(os.getenv('EXTREME_GROWTH_MIN_VOLUME_RATIO', '0.05')),
             "min_stock_price": int(os.getenv('EXTREME_GROWTH_MIN_STOCK_PRICE', '2000')),
+            "round_trip_cost": float(os.getenv('EXTREME_GROWTH_ROUND_TRIP_COST', '0.005')),
         },
     }
 

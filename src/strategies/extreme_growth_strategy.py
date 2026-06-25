@@ -61,6 +61,10 @@ class ExtremeGrowthStrategy(BaseStrategy):
         self.min_volume_ratio = float(self.config.get('min_volume_ratio', 0.05))
         # 진입 조건: 최소 주가 제한 (기본 2,000원 이상)
         self.min_stock_price = int(self.config.get('min_stock_price', 2000))
+        # 왕복 거래비용 추정치(매수/매도 수수료 + 거래세 + 슬리피지, 기본 0.5%)
+        # 손익분기 가드에 사용 — '수익으로 보이지만 비용 차감 후 실제론 손실'인
+        # 가격에 청산하는 것을 방지한다.
+        self.round_trip_cost = float(self.config.get('round_trip_cost', 0.005))
 
         # 종목별 최근 가격 이력 (deque, 모멘텀 계산용)
         from collections import deque as _deque
@@ -313,8 +317,9 @@ class ExtremeGrowthStrategy(BaseStrategy):
         activation_price = buy_price * (1 + self.trailing_stop_activation)
         if self.trailing_high[code] >= activation_price:
             trailing_stop_price = int(self.trailing_high[code] * (1 - self.trailing_stop_pct))
-            # 안전 가드: 트레일링 스탑 매도가격이 최소 수수료/세금을 커버하는 평단가 이상(+0.2%)인 경우에만 스탑 작동
-            if current_price <= trailing_stop_price and trailing_stop_price >= buy_price * 1.002:
+            # 안전 가드: 트레일링 스탑 매도가격이 왕복 거래비용을 커버하는 손익분기점 이상인 경우에만 스탑 작동
+            # (비용 차감 후 순손실이 되는 가격에서의 트레일링 청산을 방지)
+            if current_price <= trailing_stop_price and trailing_stop_price >= buy_price * (1 + self.round_trip_cost):
                 peak_gain_pct = (self.trailing_high[code] - buy_price) / buy_price * 100
                 self.sell_position(
                     code, current_price, profit,
@@ -502,8 +507,8 @@ class ExtremeGrowthStrategy(BaseStrategy):
                                 logging.warning(f"⚠️ [{code}] 미수 포지션 장 마감 강제 청산 진행 (현재가: {current_price:,}원, 손익: {profit:+,}원)")
                                 self.sell_position(code, current_price=current_price, profit=profit, reason="장 마감 미수 강제 청산")
                             else:
-                                # 현금 포지션: 수익 상태일 때만 익절 청산, 손실 상태이면 다음 날로 오버나잇
-                                if current_price >= pos['buy_price'] * 1.002:
+                                # 현금 포지션: 비용 차감 후에도 순수익일 때만 익절 청산, 그 외에는 다음 날로 오버나잇
+                                if current_price >= pos['buy_price'] * (1 + self.round_trip_cost):
                                     logging.info(f"✅ [{code}] 현금 포지션 수익 상태로 장 마감 익절 청산 진행 (현재가: {current_price:,}원, 평단가: {pos['buy_price']:,}원)")
                                     self.sell_position(code, current_price=current_price, profit=profit, reason="장 마감 현금 익절 청산")
                                 else:
