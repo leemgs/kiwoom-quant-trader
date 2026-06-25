@@ -197,8 +197,10 @@ Docker가 설치된 환경이라면 복잡한 의존성 설치 없이 아래 명
 docker-compose up -d
 ```
 - 매매 봇 로그 실시간 확인: `docker-compose logs -f bot`
-- 대시보드 접속: 브라우저에서 `http://localhost:8501`
+- 대시보드 접속: 브라우저에서 `http://localhost:8501` (외부 접속 시 `http://<서버_IP>:8501`)
 - 시스템 전체 안전 종료: `docker-compose down`
+
+> **참고**: 대시보드 컨테이너는 외부 IP 접속을 지원하기 위해 `--server.enableCORS=false --server.enableXsrfProtection=false` 옵션으로 실행됩니다. 자세한 내용은 아래 **문제 해결** 섹션을 참고하세요.
 
 ---
 
@@ -237,6 +239,23 @@ docker-compose up -d
 streamlit run src/monitor/dashboard.py
 ```
 *실행 후 브라우저에서 `localhost:8501` 주소로 접속하면 대시보드가 나타납니다.*
+
+#### 문제 해결: 대시보드가 "Please wait..." 에서 멈출 때
+외부 IP(예: `http://<서버_IP>:8501`)로 접속했을 때 화면이 **"Please wait..."** 에서 더 진행되지 않는다면, 이는 Streamlit이 화면을 그리기 위해 맺는 **WebSocket 연결**이 차단되었기 때문입니다. (HTML/JS는 받아왔지만 WebSocket이 붙지 않아 무한 대기 상태)
+
+1. **CORS/XSRF 보호가 원인인 경우 (대부분)**: `docker-compose.yml` 의 dashboard 커맨드에 아래 옵션이 적용되어 있는지 확인하세요. (기본 적용됨)
+   ```yaml
+   command: >
+     streamlit run src/monitor/dashboard.py
+     --server.address=0.0.0.0
+     --server.enableCORS=false
+     --server.enableXsrfProtection=false
+   ```
+   옵션 변경 후에는 컨테이너를 재생성해야 반영됩니다.
+   ```bash
+   docker-compose up -d --force-recreate dashboard
+   ```
+2. **네트워크/방화벽이 WebSocket을 차단하는 경우**: 위 옵션으로도 해결되지 않으면, 브라우저 개발자도구(F12) → Network 탭에서 `ws://<서버_IP>:8501/_stcore/stream` 연결 상태를 확인하세요. `failed`/`pending` 이라면 중간 프록시·방화벽이 WebSocket 업그레이드를 막는 것이므로, Nginx 등 리버스 프록시에서 `Upgrade`, `Connection` 헤더를 명시적으로 전달하도록 설정해야 합니다.
 
 ---
 
