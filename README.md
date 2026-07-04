@@ -202,6 +202,79 @@ docker-compose up -d
 
 > **참고**: 대시보드 컨테이너는 외부 IP 접속을 지원하기 위해 `--server.enableCORS=false --server.enableXsrfProtection=false` 옵션으로 실행됩니다. 자세한 내용은 아래 **문제 해결** 섹션을 참고하세요.
 
+#### 옵션 C: systemd를 이용한 부팅 시 자동 실행 (우분투)
+Docker 없이 우분투 PC가 **리부팅될 때마다** 매매 봇과 대시보드가 자동으로 실행되도록 systemd 서비스로 등록하는 방법입니다. 아래 예시는 프로젝트가 `/work/git-collect/stock-quant-trader-kis` 폴더에 설치되어 있고, 실행 계정이 `invain`이라고 가정합니다. (본인 환경에 맞게 경로와 `User`를 수정하세요.)
+
+**1. 매매 봇 서비스 파일 생성**
+
+`/etc/systemd/system/kis-trader.service` 파일을 아래 내용으로 생성합니다.
+```bash
+sudo tee /etc/systemd/system/kis-trader.service > /dev/null << 'EOF'
+[Unit]
+Description=KIS Quant Trading Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=invain
+WorkingDirectory=/work/git-collect/stock-quant-trader-kis
+ExecStart=/usr/bin/python3 /work/git-collect/stock-quant-trader-kis/main.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+- `After=network-online.target`: 부팅 직후 네트워크가 연결된 뒤에 시작합니다. (KIS API 로그인 실패 방지)
+- `Restart=on-failure`: 봇이 비정상 종료되면 10초 후 자동 재시작합니다.
+- 가상환경(venv)을 사용한다면 `ExecStart`를 `/work/git-collect/stock-quant-trader-kis/venv/bin/python main.py` 형태로 변경하세요.
+
+**2. 대시보드 서비스 파일 생성 (선택)**
+
+웹 대시보드도 부팅 시 함께 띄우려면 `/etc/systemd/system/kis-dashboard.service`를 추가로 생성합니다.
+```bash
+sudo tee /etc/systemd/system/kis-dashboard.service > /dev/null << 'EOF'
+[Unit]
+Description=KIS Trading Dashboard (Streamlit)
+After=network-online.target kis-trader.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=invain
+WorkingDirectory=/work/git-collect/stock-quant-trader-kis
+ExecStart=/usr/bin/python3 -m streamlit run src/monitor/dashboard.py --server.address=0.0.0.0 --server.enableCORS=false --server.enableXsrfProtection=false
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+**3. 서비스 등록 및 시작**
+```bash
+sudo systemctl daemon-reload                        # 서비스 파일 변경 사항 반영
+sudo systemctl enable kis-trader kis-dashboard      # 부팅 시 자동 실행 등록
+sudo systemctl start kis-trader kis-dashboard       # 지금 즉시 시작
+```
+
+**4. 운영 명령어 모음**
+```bash
+systemctl status kis-trader          # 현재 상태 확인
+journalctl -u kis-trader -f          # 실시간 로그 확인 (Ctrl+C로 종료)
+sudo systemctl restart kis-trader    # 재시작 (.env 수정 후 반영 시)
+sudo systemctl stop kis-trader       # 중지
+sudo systemctl disable kis-trader    # 부팅 시 자동 실행 해제
+```
+
+> **주의사항**
+> - `.env` 파일은 `WorkingDirectory` 기준으로 로드되므로, 반드시 프로젝트 폴더에 `.env`가 준비된 상태에서 서비스를 시작하세요.
+> - 서비스 파일을 수정한 뒤에는 항상 `sudo systemctl daemon-reload`를 먼저 실행해야 변경이 반영됩니다.
+> - 실제 재부팅 후 자동 실행되는지 `sudo reboot` → `systemctl status kis-trader`로 최종 확인하는 것을 권장합니다.
+
 ---
 
 ## 6. 자동매매 운영 가이드 (Operation Guide)
