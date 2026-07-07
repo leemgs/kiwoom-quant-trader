@@ -275,6 +275,58 @@ sudo systemctl disable kis-trader    # 부팅 시 자동 실행 해제
 > - 서비스 파일을 수정한 뒤에는 항상 `sudo systemctl daemon-reload`를 먼저 실행해야 변경이 반영됩니다.
 > - 실제 재부팅 후 자동 실행되는지 `sudo reboot` → `systemctl status kis-trader`로 최종 확인하는 것을 권장합니다.
 
+#### 옵션 D: systemd + Docker Compose를 이용한 부팅 시 자동 실행 (우분투)
+옵션 C처럼 Python을 직접 실행하는 대신, systemd가 `docker-compose up`을 호출하여 매매 봇과 대시보드 컨테이너를 통째로 관리하는 방법입니다. 의존성 설치가 필요 없고, 봇과 대시보드가 하나의 서비스 단위로 함께 기동/종료되는 것이 장점입니다. 아래 예시는 프로젝트가 `/work/git-collect/stock-quant-trader-kis` 폴더에 설치되어 있다고 가정합니다. (본인 환경에 맞게 경로를 수정하세요.)
+
+**1. 서비스 파일 생성**
+
+`/etc/systemd/system/kis-trader-docker.service` 파일을 아래 내용으로 생성합니다.
+```bash
+sudo tee /etc/systemd/system/kis-trader-docker.service > /dev/null << 'EOF'
+[Unit]
+Description=KIS Quant Trading Bot + Dashboard (Docker Compose)
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/work/git-collect/stock-quant-trader-kis
+ExecStart=/usr/bin/docker-compose up -d
+ExecStop=/usr/bin/docker-compose down
+ExecReload=/usr/bin/docker-compose restart
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+- `Requires=docker.service` / `After=docker.service`: Docker 데몬이 먼저 기동된 뒤에 컨테이너를 올립니다.
+- `Type=oneshot` + `RemainAfterExit=yes`: `docker-compose up -d`는 컨테이너를 띄우고 즉시 종료되는 명령이므로, 서비스가 "실행 완료 후에도 활성(active)" 상태로 유지되도록 하는 설정입니다. 실제 프로세스 관리는 Docker가 담당합니다.
+- Docker Compose **v2 플러그인**(`docker compose`, 하이픈 없음)을 사용하는 환경이라면 `ExecStart`/`ExecStop`/`ExecReload`를 각각 `/usr/bin/docker compose up -d` 형태로 변경하세요. 설치된 경로는 `which docker-compose` 또는 `docker compose version`으로 확인할 수 있습니다.
+
+**2. 서비스 등록 및 시작**
+```bash
+sudo systemctl daemon-reload                  # 서비스 파일 변경 사항 반영
+sudo systemctl enable kis-trader-docker      # 부팅 시 자동 실행 등록
+sudo systemctl start kis-trader-docker       # 지금 즉시 시작
+```
+
+**3. 운영 명령어 모음**
+```bash
+systemctl status kis-trader-docker           # 서비스 상태 확인
+docker-compose ps                            # 컨테이너 상태 확인 (프로젝트 폴더에서)
+docker-compose logs -f bot                   # 매매 봇 실시간 로그 확인
+sudo systemctl reload kis-trader-docker      # 컨테이너 재시작 (.env 수정 후 반영 시)
+sudo systemctl stop kis-trader-docker        # 전체 중지 (docker-compose down)
+sudo systemctl disable kis-trader-docker     # 부팅 시 자동 실행 해제
+```
+
+> **주의사항**
+> - **옵션 C와 동시에 사용하지 마세요.** `kis-trader`/`kis-dashboard` 서비스(직접 Python 실행)와 이 서비스를 함께 활성화하면 매매 봇이 이중으로 실행되어 중복 주문이 발생할 수 있습니다. 하나만 `enable` 하세요.
+> - `docker-compose.yml`의 `restart: unless-stopped` 정책 덕분에 Docker 데몬만 부팅 시 자동 시작되면(우분투 기본값) 컨테이너도 함께 살아납니다. 그럼에도 이 서비스를 등록해두면 `systemctl` 명령 하나로 봇 전체를 시작/중지/재시작할 수 있어 운영이 편리합니다.
+> - `.env` 수정 후에는 `sudo systemctl reload kis-trader-docker`(또는 프로젝트 폴더에서 `docker-compose restart`)로 컨테이너를 재시작해야 반영됩니다.
+
 ---
 
 ## 6. 자동매매 운영 가이드 (Operation Guide)
