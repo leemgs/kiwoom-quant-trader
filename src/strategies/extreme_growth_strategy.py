@@ -536,7 +536,15 @@ class ExtremeGrowthStrategy(BaseStrategy):
                 # 설정된 시작 시간 이전 또는 15:15 이후에는 신규 매수 금지
                 if current_time < self.buy_start_time or is_after_market_close:
                     continue
-                    
+
+                # 예수금 부족으로 '매수 불가' 판정된 종목은 쿨다운(5분) 동안 시세 조회
+                # 자체를 생략한다. 경고 로그만 억제하고 API 호출을 계속하면, 예수금보다
+                # 비싼 종목이 많은 유니버스에서 KIS rate limit(초당 거래건수 초과)의
+                # 주원인이 되기 때문이다. 쿨다운이 끝나면 다시 시세를 조회해 재평가한다.
+                if hasattr(self, '_unaffordable_logged'):
+                    if time.time() - self._unaffordable_logged.get(code, 0) < 300:
+                        continue
+
                 # API를 통해 실시간 시세 수신 (price_cache_ttl초 캐시 적용)
                 price_refreshed = False
                 try:

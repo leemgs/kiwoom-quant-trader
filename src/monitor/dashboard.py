@@ -38,8 +38,6 @@ investment_budget = int(os.getenv('INVESTMENT_BUDGET', '10000'))
 is_virtual = os.getenv('KIS_VIRTUAL_TRADING', 'true').lower() == 'true'
 db_path = "data/trading_history_mock.db" if is_virtual else "data/trading_history_real.db"
 
-BASELINE_FILE = "data/profit_baseline.txt"
-
 # ── 주식 종목명 매핑 ─────────────────────────────────────────────────────────────
 STOCK_NAMES = {
     # 한국 주식 (UNIVERSE)
@@ -118,24 +116,6 @@ def get_stock_name(code: str) -> str:
             pass
             
     return code_str
-
-# ── 유틸리티 함수 ───────────────────────────────────────────────────────────────
-def get_profit_baseline(default_value):
-    if os.path.exists(BASELINE_FILE):
-        try:
-            with open(BASELINE_FILE, "r") as f:
-                return float(f.read().strip())
-        except Exception:
-            pass
-    return default_value
-
-def save_profit_baseline(value):
-    try:
-        os.makedirs(os.path.dirname(BASELINE_FILE), exist_ok=True)
-        with open(BASELINE_FILE, "w") as f:
-            f.write(str(value))
-    except Exception as e:
-        print(f"Error saving profit baseline: {e}")
 
 # ── 데이터 로드 (캐시 TTL=10초) ─────────────────────────────────────────────────
 @st.cache_data(ttl=10)
@@ -347,8 +327,10 @@ if is_virtual:
     system_profit = total_profit
     system_profit_label = "시스템 누적 실현손익 (모의)"
 else:
-    baseline = get_profit_baseline(investment_budget)
-    system_profit = real_total_assets - baseline
+    # 실전 실현손익은 총자산 변화량이 아니라 거래 기록(DB)의 손익 합계로 계산한다.
+    # 총자산 변화량 방식은 계좌 입금·출금이 그대로 손익으로 오인되는 문제가 있다
+    # (예: 4만원 입금 → 거래 0건인데 '실현손익 +40,000원'으로 표시).
+    system_profit = total_profit
     system_profit_label = "시스템 누적 실현손익 (실전)"
 
 # ── 사이드바 ──────────────────────────────────────────────────────────────────
@@ -392,7 +374,7 @@ if not is_virtual:
         st.session_state['show_reset_confirm'] = False
 
     if not st.session_state['show_reset_confirm']:
-        if st.sidebar.button("실전 손익 초기화 🔄", help="현재 실제 총자산을 기준으로 누적 실현손익을 0원으로 리셋합니다."):
+        if st.sidebar.button("실전 손익 초기화 🔄", help="실전 거래 기록(DB)을 비워 누적 실현손익을 0원으로 리셋합니다."):
             st.session_state['show_reset_confirm'] = True
             st.rerun()
     else:
@@ -400,7 +382,6 @@ if not is_virtual:
         col1, col2 = st.sidebar.columns(2)
         with col1:
             if st.button("예", use_container_width=True):
-                save_profit_baseline(real_total_assets)
                 try:
                     from core.database import TradeDatabase
                     db = TradeDatabase("data/trading_history_real.db")

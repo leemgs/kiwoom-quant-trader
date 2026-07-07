@@ -203,7 +203,7 @@ docker-compose up -d
 > **참고**: 대시보드 컨테이너는 외부 IP 접속을 지원하기 위해 `--server.enableCORS=false --server.enableXsrfProtection=false` 옵션으로 실행됩니다. 자세한 내용은 아래 **문제 해결** 섹션을 참고하세요.
 
 #### 옵션 C: systemd를 이용한 부팅 시 자동 실행 (우분투)
-Docker 없이 우분투 PC가 **리부팅될 때마다** 매매 봇과 대시보드가 자동으로 실행되도록 systemd 서비스로 등록하는 방법입니다. 아래 예시는 프로젝트가 `/work/git-collect/stock-quant-trader-kis` 폴더에 설치되어 있고, 실행 계정이 `invain`이라고 가정합니다. (본인 환경에 맞게 경로와 `User`를 수정하세요.)
+Docker 없이 우분투 PC가 **리부팅될 때마다** 매매 봇과 대시보드가 자동으로 실행되도록 systemd 서비스로 등록하는 방법입니다. 아래 예시는 프로젝트가 `/work/github-leemgs/stock-quant-trader-kis` 폴더에 설치되어 있고, 실행 계정이 `invain`이라고 가정합니다. (본인 환경에 맞게 경로와 `User`를 수정하세요.)
 
 **1. 매매 봇 서비스 파일 생성**
 
@@ -218,8 +218,8 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=invain
-WorkingDirectory=/work/git-collect/stock-quant-trader-kis
-ExecStart=/usr/bin/python3 /work/git-collect/stock-quant-trader-kis/main.py
+WorkingDirectory=/work/github-leemgs/stock-quant-trader-kis
+ExecStart=/usr/bin/python3 /work/github-leemgs/stock-quant-trader-kis/main.py
 Restart=on-failure
 RestartSec=10
 
@@ -229,7 +229,7 @@ EOF
 ```
 - `After=network-online.target`: 부팅 직후 네트워크가 연결된 뒤에 시작합니다. (KIS API 로그인 실패 방지)
 - `Restart=on-failure`: 봇이 비정상 종료되면 10초 후 자동 재시작합니다.
-- 가상환경(venv)을 사용한다면 `ExecStart`를 `/work/git-collect/stock-quant-trader-kis/venv/bin/python main.py` 형태로 변경하세요.
+- 가상환경(venv)을 사용한다면 `ExecStart`를 `/work/github-leemgs/stock-quant-trader-kis/venv/bin/python main.py` 형태로 변경하세요.
 
 **2. 대시보드 서비스 파일 생성 (선택)**
 
@@ -244,7 +244,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=invain
-WorkingDirectory=/work/git-collect/stock-quant-trader-kis
+WorkingDirectory=/work/github-leemgs/stock-quant-trader-kis
 ExecStart=/usr/bin/python3 -m streamlit run src/monitor/dashboard.py --server.address=0.0.0.0 --server.enableCORS=false --server.enableXsrfProtection=false
 Restart=on-failure
 RestartSec=10
@@ -276,7 +276,7 @@ sudo systemctl disable kis-trader    # 부팅 시 자동 실행 해제
 > - 실제 재부팅 후 자동 실행되는지 `sudo reboot` → `systemctl status kis-trader`로 최종 확인하는 것을 권장합니다.
 
 #### 옵션 D: systemd + Docker Compose를 이용한 부팅 시 자동 실행 (우분투)
-옵션 C처럼 Python을 직접 실행하는 대신, systemd가 `docker-compose up`을 호출하여 매매 봇과 대시보드 컨테이너를 통째로 관리하는 방법입니다. 의존성 설치가 필요 없고, 봇과 대시보드가 하나의 서비스 단위로 함께 기동/종료되는 것이 장점입니다. 아래 예시는 프로젝트가 `/work/git-collect/stock-quant-trader-kis` 폴더에 설치되어 있다고 가정합니다. (본인 환경에 맞게 경로를 수정하세요.)
+옵션 C처럼 Python을 직접 실행하는 대신, systemd가 `docker-compose up`을 호출하여 매매 봇과 대시보드 컨테이너를 통째로 관리하는 방법입니다. 의존성 설치가 필요 없고, 봇과 대시보드가 하나의 서비스 단위로 함께 기동/종료되는 것이 장점입니다. 아래 예시는 프로젝트가 `/work/github-leemgs/stock-quant-trader-kis` 폴더에 설치되어 있다고 가정합니다. (본인 환경에 맞게 경로를 수정하세요.)
 
 **1. 서비스 파일 생성**
 
@@ -292,10 +292,10 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=/work/git-collect/stock-quant-trader-kis
-ExecStart=/usr/bin/docker-compose up -d
-ExecStop=/usr/bin/docker-compose down
-ExecReload=/usr/bin/docker-compose restart
+WorkingDirectory=/work/github-leemgs/stock-quant-trader-kis
+ExecStart=/usr/local/bin/docker-compose up -d
+ExecStop=/usr/local/bin/docker-compose down
+ExecReload=/usr/local/bin/docker-compose restart
 
 [Install]
 WantedBy=multi-user.target
