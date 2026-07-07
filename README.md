@@ -6,6 +6,55 @@
 >
 > 🌐 **공식 가이드 웹사이트**: [docs/index.html](docs/index.html) (브라우저로 열기) 
 
+---
+
+## 🧩 한눈에 보기
+
+**`.env` 파일 하나로 설정**하고 봇을 켜면, 매매 엔진이 KIS API로 시세를 감시·주문하고, 그 기록을 대시보드로 실시간 확인하는 구조입니다.
+
+```mermaid
+flowchart LR
+    subgraph EXT["🌐 외부 서비스"]
+        KIS["🏦 한국투자증권<br/>KIS Open API"]
+        SLACK["💬 Slack<br/>(선택: 매매 알림)"]
+        GEM["🤖 Google Gemini<br/>(선택: AI 뉴스/복기 분석)"]
+    end
+
+    subgraph BOT["stock-quant-trader-kis"]
+        direction LR
+        ENV["⚙️ .env<br/><b>설정</b><br/>계좌·유니버스·전략 파라미터"]
+        M["🚀 main.py<br/><b>자동매매 엔진</b><br/>전략 판정·리스크 관리"]
+        DB["🗂️ SQLite DB<br/><b>거래 기록</b><br/>data/"]
+        D["📊 dashboard<br/><b>실시간 모니터링</b><br/>Streamlit (:8501)"]
+        ENV --> M
+        M -->|"체결 기록 (실제 체결만)"| DB
+        DB -->|거래 내역·손익| D
+    end
+
+    KIS <-->|"시세 조회 · 주문/체결"| M
+    KIS -->|예수금·잔고 조회| D
+    M -.->|매매 알림| SLACK
+    GEM -.->|호재/악재 점수| M
+
+    style M fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+    style DB fill:#fef3c7,stroke:#f59e0b,color:#78350f
+    style D fill:#dcfce7,stroke:#22c55e,color:#14532d
+```
+
+| 구성 요소 | 역할 | 한 줄 설명 |
+|---|---|---|
+| [`main.py`](./main.py) | 🚀 **진입점** | `.env` 설정을 읽어 매매 봇 전체를 가동 |
+| [`src/strategies/`](./src/strategies) | 📈 **전략 엔진** | 변동성 돌파 + 스마트 모멘텀(Extreme Growth) 진입/청산 판정 |
+| [`src/broker/`](./src/broker) | 🏦 **KIS 연동** | REST 시세 조회·주문 집행, 호출 간격 스로틀링(rate limit 보호) |
+| [`src/monitor/dashboard.py`](./src/monitor/dashboard.py) | 📊 **대시보드** | 자산·손익·시스템 로그를 웹으로 실시간 시각화 |
+| [`src/analytics/`](./src/analytics), [`src/backtester/`](./src/backtester) | 🧪 **분석/백테스트** | 성과 리포트, 슬리피지 분석, 유전 알고리즘 파라미터 최적화 |
+| `data/` | 🗂️ **런타임 데이터** | 거래 기록 SQLite DB, 잔고 캐시 (git 미추적) |
+| [`.env`](./.env.sample) | ⚙️ **설정** | 계좌·API 키·감시 종목·손절/익절 등 모든 운영 설정 |
+
+> **실행은 4가지 중 택 1**: ① `python3 main.py` 직접 실행 ② Docker Compose(권장) ③ systemd(Python) ④ systemd + Docker Compose — [5단계: 프로그램 실행](#5단계-프로그램-실행) 참고.
+
+---
+
 ## 🌌 프로젝트 명칭 및 철학 (Naming & Philosophy)
 
 **Stock Quant Trader 🚀** 는 특정 증권사에 종속되지 않고, 리눅스(Ubuntu) 환경에서도 중단 없이 돌아가는 견고한 퀀트 시스템을 지향합니다.
@@ -59,6 +108,49 @@ graph TD
     H --> I[Analytics Engine]
     I -->|성과 분석| J[PDF Report/Graphs]
 ```
+
+## 🔄 동작 흐름 (Operation Flow)
+
+하루 매매 사이클의 실제 동작 순서입니다. 봇은 장중(09:00~15:20)에 아래 루프를 반복하며, **실제 체결이 확인된 거래만** DB에 기록합니다.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant B as 🚀 매매 봇 (main.py)
+    participant K as 🏦 KIS API
+    participant S as 📈 전략 엔진
+    participant DB as 🗂️ SQLite DB
+    participant D as 📊 대시보드
+
+    B->>B: .env 설정 로드 (계좌·유니버스·전략 파라미터)
+    B->>K: 인증 토큰 발급 · 한국/미국 휴장일 확인
+    loop 장중 루프 (09:00 ~ 15:20)
+        B->>K: 예수금·잔고 동기화 (30초 캐시)
+        B->>K: 유니버스 종목 시세 조회 (5초 캐시)
+        S->>S: 사전 필터: 매수 가능액 · 최소 주가 · 거래량/유동성
+        Note over S: 예수금보다 비싼 종목은<br/>5분간 시세 조회 자체를 생략 (API 절약)
+        S->>S: 진입 판정: 시가 대비 +1.5~7% 돌파<br/>+ 연속 상승 모멘텀 (3틱)
+        alt 진입 신호 발생 (09:15 이후)
+            S->>K: 지정가 매수 주문 (스마트 Maker 라우팅)
+            K-->>S: 체결 응답 검증 (rt_cd == '0')
+            S->>DB: 체결 기록 저장 (Zero-Ghost)
+        end
+        S->>K: 보유 포지션 실시간 시세 감시
+        alt 익절/손절/트레일링 스탑 조건 충족
+            S->>K: 매도 주문 → 체결 검증
+            S->>DB: 실현손익 기록
+        end
+    end
+    B->>K: 15:20 이후 보유 종목 전량 청산 (기본 설정)
+    D->>K: 예수금·잔고 실시간 조회 (30초 주기)
+    DB->>D: 거래 내역·누적 손익·승률 시각화
+```
+
+> **핵심 원칙**
+> - **1일 1회/종목**: 같은 종목은 하루 한 번만 거래하여 과도한 수수료를 방지합니다.
+> - **Zero-Ghost**: KIS 주문 응답(`rt_cd == '0'`)이 검증된 실제 체결만 포지션·DB에 기록합니다.
+> - **실현손익 = 거래 기록 합계**: 계좌 입금·출금은 손익에 반영되지 않습니다.
+> - **API 호출 최소화**: 시세 5초·잔고 30초 캐시, 매수 불가 종목 5분 스킵, 휴장일 저전력 대기로 KIS rate limit을 보호합니다.
 
 ## 2. 실행 화면 (Screenshots)
 
