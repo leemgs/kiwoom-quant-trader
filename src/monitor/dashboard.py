@@ -682,13 +682,6 @@ st.sidebar.markdown(
     unsafe_allow_html=True
 )
 
-# ── 메인 콘텐츠 ───────────────────────────────────────────────────────────────
-st.markdown(
-    f"<h2 style='font-size:28px;font-weight:bold;margin-bottom:6px;'>🚀 Real-time Dashboard for Stock Quant Trader</h2>"
-    f"<p style='color:#888;font-size:13px;margin:0 0 16px 0;'>현재 메뉴: <b>{selected_menu}</b></p>",
-    unsafe_allow_html=True
-)
-
 # ── 공통 계산 (요약 KPI 및 각 섹션 공용) ──────────────────────────────────────
 INITIAL_SEED = investment_budget
 INVESTMENT_PERIOD_MONTH = int(os.getenv('INVESTMENT_PERIOD_MONTH', '1'))
@@ -716,21 +709,33 @@ else:
 unfilled_buy = 0
 unfilled_sell = 0
 
-# ── 항상 표시되는 요약 KPI 행 (스크롤 없이 핵심 지표 확인) ────────────────────
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    st.metric("총 거래 횟수", f"{total_trades}회")
-    st.markdown(f"""
-        <div style="font-size:11px;color:#888;margin-top:-10px;line-height:1.3;">
-            체결수량 (매수: {buy_count}회 , 매도: {sell_count}회)<br>
-            미체결수량 (매수: {unfilled_buy}회 , 매도: {unfilled_sell}회)
-        </div>
-    """, unsafe_allow_html=True)
-col2.metric("승률", f"{win_rate:.1f}%")
-col3.metric("누적 손익", f"{display_profit:,.0f}원", delta=f"{display_profit:,.0f}")
-col4.metric("목표 달성률", f"{(display_profit/TARGET_GOAL)*100:.1f}%")
+# ── 메인 콘텐츠 ───────────────────────────────────────────────────────────────
+# 헤더(제목)와 요약 KPI를 컴팩트한 한 줄 요약 바로 통합하여 상단 공간을 최소화한다.
+_profit_color = '#e53935' if display_profit < 0 else '#2e7d32' if display_profit > 0 else '#333'
+_goal_rate = (display_profit / TARGET_GOAL * 100) if TARGET_GOAL else 0.0
+_goal_color = '#e53935' if _goal_rate < 0 else '#2e7d32' if _goal_rate > 0 else '#333'
 
-st.divider()
+st.markdown(
+    f"""
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px 12px;margin-bottom:8px;">
+  <span style="font-size:20px;font-weight:800;">🚀 Real-time Dashboard for Stock Quant Trader</span>
+  <span style="font-size:12px;color:#888;">현재 메뉴: <b style="color:#03256C;">{selected_menu}</b></span>
+</div>
+<div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;
+     padding:8px 14px;background:#f8f9fa;border:1px solid #e6e6e6;border-radius:8px;
+     font-size:13px;color:#444;margin-bottom:14px;">
+  <span>📊 <b>총 거래</b> <b style="font-size:15px;">{total_trades}</b>회
+       <span style="color:#aaa;font-size:11px;">(매수 {buy_count}·매도 {sell_count} / 미체결 매수 {unfilled_buy}·매도 {unfilled_sell})</span></span>
+  <span style="color:#ddd;">|</span>
+  <span>🎯 <b>승률</b> <b style="font-size:15px;">{win_rate:.1f}%</b></span>
+  <span style="color:#ddd;">|</span>
+  <span>💰 <b>누적 손익</b> <b style="font-size:15px;color:{_profit_color};">{display_profit:+,.0f}원</b></span>
+  <span style="color:#ddd;">|</span>
+  <span>🏁 <b>목표 달성률</b> <b style="font-size:15px;color:{_goal_color};">{_goal_rate:.1f}%</b></span>
+</div>
+""",
+    unsafe_allow_html=True
+)
 
 # ── 선택된 메뉴에 해당하는 섹션만 렌더링 (스크롤 최소화) ──────────────────────
 if selected_menu == "🌐 시장 국면":
