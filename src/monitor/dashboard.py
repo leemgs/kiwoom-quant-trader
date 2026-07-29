@@ -45,6 +45,41 @@ MENU_ITEMS = [
     "🖥️ System Activity Logs",
 ]
 
+# 거래 시간 안내 표 (사이드바 대신 '수익 도전 현황' 섹션의 expander에서 사용)
+MARKET_HOURS_TABLE_HTML = """
+<table style="width:100%;border-collapse:collapse;font-size:11.5px;margin-top:5px;border:1px solid #e0e0e0;border-radius:6px;">
+  <thead>
+    <tr style="border-bottom:2px solid #e0e0e0;background-color:#f8f9fa;">
+      <th style="text-align:left;padding:6px;font-weight:bold;color:#333;">구분</th>
+      <th style="text-align:center;padding:6px;font-weight:bold;color:#03256C;">한국</th>
+      <th style="text-align:center;padding:6px;font-weight:bold;color:#a53535;">미국</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr style="border-bottom:1px solid #eee;">
+      <td style="padding:6px;font-weight:bold;color:#555;background-color:#fafafa;">운영 요일</td>
+      <td style="text-align:center;padding:6px;color:#333;">월 ~ 금<br><span style="font-size:9.5px;color:#888;">(공휴일 제외)</span></td>
+      <td style="text-align:center;padding:6px;color:#333;">월 ~ 금<br><span style="font-size:9.5px;color:#888;">(공휴일 제외)</span></td>
+    </tr>
+    <tr style="border-bottom:1px solid #eee;">
+      <td style="padding:6px;font-weight:bold;color:#555;background-color:#fafafa;">개장 준비</td>
+      <td style="text-align:center;padding:6px;color:#333;">08:50 ~ 09:00</td>
+      <td style="text-align:center;padding:6px;color:#333;">22:30 ~ 23:30</td>
+    </tr>
+    <tr style="border-bottom:1px solid #eee;">
+      <td style="padding:6px;font-weight:bold;color:#555;background-color:#fafafa;">자동 매매</td>
+      <td style="text-align:center;padding:6px;color:#2e7d32;font-weight:bold;">09:00 ~ 15:15</td>
+      <td style="text-align:center;padding:6px;color:#c62828;font-weight:bold;">23:30 ~ 05:00</td>
+    </tr>
+    <tr>
+      <td style="padding:6px;font-weight:bold;color:#555;background-color:#fafafa;">강제 청산</td>
+      <td style="text-align:center;padding:6px;color:#e53935;font-weight:bold;">15:15<br><span style="font-size:9.5px;font-weight:normal;color:#e53935;">(미수 방지)</span></td>
+      <td style="text-align:center;padding:6px;color:#777;">-</td>
+    </tr>
+  </tbody>
+</table>
+"""
+
 def _get_query_param(key, default=None):
     """Streamlit 버전에 무관하게 쿼리 파라미터 값을 읽는다."""
     try:  # Streamlit >= 1.30
@@ -597,89 +632,15 @@ selected_menu = st.sidebar.radio(
 )
 # 현재 선택을 쿼리 파라미터에 반영 (다음 자동 새로고침 시 복원용)
 _set_query_param("view", str(MENU_ITEMS.index(selected_menu)))
-st.sidebar.markdown("---")
 
-# 실전 모드 손익 초기화
-if not is_virtual:
-    if 'show_reset_confirm' not in st.session_state:
-        st.session_state['show_reset_confirm'] = False
-
-    if not st.session_state['show_reset_confirm']:
-        if st.sidebar.button("실전 손익 초기화 🔄", help="실전 거래 기록(DB)을 비워 누적 실현손익을 0원으로 리셋합니다."):
-            st.session_state['show_reset_confirm'] = True
-            st.rerun()
-    else:
-        st.sidebar.warning("기존 실현 손익액이 0원으로 완전히 초기화됩니다. 정말 수행하시겠습니까?")
-        col1, col2 = st.sidebar.columns(2)
-        with col1:
-            if st.button("예", use_container_width=True):
-                try:
-                    from core.database import TradeDatabase
-                    db = TradeDatabase("data/trading_history_real.db")
-                    with sqlite3.connect(db.db_path) as conn:
-                        conn.execute("DELETE FROM trades")
-                        conn.commit()
-                except Exception as e:
-                    print(f"Error clearing real trades DB: {e}")
-                get_data.clear()
-                st.session_state['show_reset_confirm'] = False
-                st.sidebar.success("초기화 완료!")
-                st.rerun()
-        with col2:
-            if st.button("아니오", use_container_width=True):
-                st.session_state['show_reset_confirm'] = False
-                st.rerun()
-
-# 거래시간 expander
-expander_title = f"⏰ {now.strftime('%Y-%m-%d %H:%M')} (한국:{'휴일' if is_kor_holiday else '평일'}, 미국:{'휴일' if is_us_holiday else '평일'}) ℹ️"
-with st.sidebar.expander(expander_title):
-    st.markdown("""
-<table style="width:100%;border-collapse:collapse;font-size:11.5px;margin-top:5px;border:1px solid #e0e0e0;border-radius:6px;">
-  <thead>
-    <tr style="border-bottom:2px solid #e0e0e0;background-color:#f8f9fa;">
-      <th style="text-align:left;padding:6px;font-weight:bold;color:#333;">구분</th>
-      <th style="text-align:center;padding:6px;font-weight:bold;color:#03256C;">한국</th>
-      <th style="text-align:center;padding:6px;font-weight:bold;color:#a53535;">미국</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr style="border-bottom:1px solid #eee;">
-      <td style="padding:6px;font-weight:bold;color:#555;background-color:#fafafa;">운영 요일</td>
-      <td style="text-align:center;padding:6px;color:#333;">월 ~ 금<br><span style="font-size:9.5px;color:#888;">(공휴일 제외)</span></td>
-      <td style="text-align:center;padding:6px;color:#333;">월 ~ 금<br><span style="font-size:9.5px;color:#888;">(공휴일 제외)</span></td>
-    </tr>
-    <tr style="border-bottom:1px solid #eee;">
-      <td style="padding:6px;font-weight:bold;color:#555;background-color:#fafafa;">개장 준비</td>
-      <td style="text-align:center;padding:6px;color:#333;">08:50 ~ 09:00</td>
-      <td style="text-align:center;padding:6px;color:#333;">22:30 ~ 23:30</td>
-    </tr>
-    <tr style="border-bottom:1px solid #eee;">
-      <td style="padding:6px;font-weight:bold;color:#555;background-color:#fafafa;">자동 매매</td>
-      <td style="text-align:center;padding:6px;color:#2e7d32;font-weight:bold;">09:00 ~ 15:15</td>
-      <td style="text-align:center;padding:6px;color:#c62828;font-weight:bold;">23:30 ~ 05:00</td>
-    </tr>
-    <tr>
-      <td style="padding:6px;font-weight:bold;color:#555;background-color:#fafafa;">강제 청산</td>
-      <td style="text-align:center;padding:6px;color:#e53935;font-weight:bold;">15:15<br><span style="font-size:9.5px;font-weight:normal;color:#e53935;">(미수 방지)</span></td>
-      <td style="text-align:center;padding:6px;color:#777;">-</td>
-    </tr>
-  </tbody>
-</table>
-""", unsafe_allow_html=True)
-
-refresh_rate = st.sidebar.slider("새로고침 간격(초)", 5, 60, 30)
-
-st.sidebar.markdown("---")
-st.sidebar.markdown(
-    """
-    <a href="https://leemgs.github.io/stock-quant-trader-kis/" target="_blank" style="text-decoration:none;">
-        <div style='background-color:#f8f9fa;color:#333;padding:10px;border-radius:6px;text-align:center;border:1px solid #ddd;font-weight:bold;font-size:14px;'>
-            🏠 프로젝트 공식 홈페이지
-        </div>
-    </a>
-    """,
-    unsafe_allow_html=True
-)
+# 새로고침 간격은 쿼리 파라미터(refresh)로 영속화하여, '수익 도전 현황' 이외의
+# 메뉴에서도 하단 자동 새로고침(meta refresh)이 정상 동작하도록 한다.
+# 슬라이더 위젯 자체는 '🎯 수익 도전 현황' 섹션에서 렌더링한다.
+try:
+    refresh_rate = int(_get_query_param("refresh", "30"))
+except (ValueError, TypeError):
+    refresh_rate = 30
+refresh_rate = min(60, max(5, refresh_rate))
 
 # ── 공통 계산 (요약 KPI 및 각 섹션 공용) ──────────────────────────────────────
 INITIAL_SEED = investment_budget
@@ -752,6 +713,63 @@ elif selected_menu == "🎯 수익 도전 현황":
     progress = min(1.0, max(0.0, display_current_total / TARGET_GOAL))
     st.progress(progress)
     st.write(f"현재 총 자산: **{display_current_total:,.0f}원** / 목표 자산: **{TARGET_GOAL:,.0f}원**")
+
+    # ── 설정 및 정보 (사이드바에서 이전됨) ──────────────────────────────────
+    st.divider()
+    st.markdown("#### ⚙️ 설정 및 정보")
+
+    # 실전 모드 손익 초기화
+    if not is_virtual:
+        if 'show_reset_confirm' not in st.session_state:
+            st.session_state['show_reset_confirm'] = False
+        if not st.session_state['show_reset_confirm']:
+            if st.button("실전 손익 초기화 🔄", help="실전 거래 기록(DB)을 비워 누적 실현손익을 0원으로 리셋합니다."):
+                st.session_state['show_reset_confirm'] = True
+                st.rerun()
+        else:
+            st.warning("기존 실현 손익액이 0원으로 완전히 초기화됩니다. 정말 수행하시겠습니까?")
+            _rc1, _rc2, _sp = st.columns([1, 1, 4])
+            with _rc1:
+                if st.button("예", use_container_width=True):
+                    try:
+                        from core.database import TradeDatabase
+                        db = TradeDatabase("data/trading_history_real.db")
+                        with sqlite3.connect(db.db_path) as conn:
+                            conn.execute("DELETE FROM trades")
+                            conn.commit()
+                    except Exception as e:
+                        print(f"Error clearing real trades DB: {e}")
+                    get_data.clear()
+                    st.session_state['show_reset_confirm'] = False
+                    st.success("초기화 완료!")
+                    st.rerun()
+            with _rc2:
+                if st.button("아니오", use_container_width=True):
+                    st.session_state['show_reset_confirm'] = False
+                    st.rerun()
+
+    # 거래 시간 안내
+    expander_title = f"⏰ {now.strftime('%Y-%m-%d %H:%M')} (한국:{'휴일' if is_kor_holiday else '평일'}, 미국:{'휴일' if is_us_holiday else '평일'}) ℹ️"
+    with st.expander(expander_title):
+        st.markdown(MARKET_HOURS_TABLE_HTML, unsafe_allow_html=True)
+
+    # 새로고침 간격 (변경 시 쿼리 파라미터에 영속화 → 다른 메뉴/자동 새로고침에도 반영)
+    _new_rate = st.slider("새로고침 간격(초)", 5, 60, refresh_rate)
+    if _new_rate != refresh_rate:
+        _set_query_param("refresh", str(_new_rate))
+        refresh_rate = _new_rate
+
+    # 프로젝트 공식 홈페이지
+    st.markdown(
+        """
+        <a href="https://leemgs.github.io/stock-quant-trader-kis/" target="_blank" style="text-decoration:none;">
+            <div style='background-color:#f8f9fa;color:#333;padding:10px;border-radius:6px;text-align:center;border:1px solid #ddd;font-weight:bold;font-size:14px;max-width:320px;'>
+                🏠 프로젝트 공식 홈페이지
+            </div>
+        </a>
+        """,
+        unsafe_allow_html=True
+    )
 
 elif selected_menu == "📈 Cumulative Equity Curve":
     st.subheader("📈 Cumulative Equity Curve")
