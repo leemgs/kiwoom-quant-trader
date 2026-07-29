@@ -127,40 +127,102 @@ MARKET_REGIME_INDICES = [
     {"flag": "🇯🇵", "name": "일본 Nikkei225", "symbol": "^N225"},
 ]
 
-@st.cache_data(ttl=3600)
-def get_market_regime(ma_window: int = 200):
-    """주요 글로벌 지수의 200일선 대비 등락률을 계산하여 상승장/하락장을 판정한다.
+# 지수별 마지막 정상 조회값 캐시 (성공만 저장). 프로세스 수명 동안 유지.
+#   symbol -> {"price", "ma", "diff_pct", "is_bull", "time"}
+# 실패 결과는 캐시하지 않으므로, 일시적 오류는 다음 새로고침에서 곧바로 재시도된다.
+_MARKET_REGIME_CACHE = {}
+_MARKET_REGIME_GOOD_TTL = 3600  # 정상값 유효시간(초): 200일선은 하루 단위로 변하므로 1시간이면 충분
 
-    반환: [{flag, name, symbol, price, ma, diff_pct, is_bull, ok}, ...]
-    (200일 이동평균선은 하루 단위로 변하므로 1시간 캐시를 적용해 yfinance 부하를 완화한다.)
+def _fetch_index_closes(symbol: str):
+    """야후 파이낸스 차트 API를 requests로 직접 호출하여 일봉 종가 리스트를 반환.
+
+    오래된 yfinance(예: 0.2.31)의 크럼/복호화 실패 이슈를 피하기 위해 경량 차트
+    엔드포인트를 브라우저 User-Agent로 직접 조회한다. query1/query2 두 호스트를
+    순차 시도한다. 실패 시 예외를 발생시킨다.
     """
-    import yfinance as yf
-    results = []
-    for item in MARKET_REGIME_INDICES:
-        row = {**item, "price": None, "ma": None, "diff_pct": None, "is_bull": None, "ok": False}
+    import requests
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    last_err = None
+    for host in ("query1.finance.yahoo.com", "query2.finance.yahoo.com"):
+        url = f"https://{host}/v8/finance/chart/{symbol}?range=1y&interval=1d"
         try:
-            hist = yf.Ticker(item["symbol"]).history(period="1y")
-            closes = hist["Close"].dropna() if hist is not None and "Close" in hist else None
-            if closes is not None and len(closes) >= 2:
-                price = float(closes.iloc[-1])
-                window = min(ma_window, len(closes))
-                ma = float(closes.tail(window).mean())
-                diff_pct = ((price - ma) / ma * 100) if ma else 0.0
-                row.update({
-                    "price": price,
-                    "ma": ma,
-                    "diff_pct": diff_pct,
-                    "is_bull": price >= ma,
-                    "ok": True,
-                })
+            resp = requests.get(url, headers=headers, timeout=10)
+            resp.raise_for_status()
+            data = resp.json()
+            result = (data.get("chart", {}).get("result") or [None])[0]
+            if not result:
+                raise ValueError("빈 응답(result 없음)")
+            quote = (result.get("indicators", {}).get("quote") or [{}])[0]
+            closes = [c for c in (quote.get("close") or []) if c is not None]
+            if len(closes) >= 2:
+                return closes
+            raise ValueError(f"종가 데이터 부족(len={len(closes)})")
         except Exception as e:
-            print(f"Market regime fetch error ({item['symbol']}): {e}")
+            last_err = e
+            continue
+    raise last_err if last_err else RuntimeError("알 수 없는 조회 오류")
+
+def _fetch_index_yfinance(symbol: str):
+    """폴백: yfinance로 종가 리스트 조회."""
+    import yfinance as yf
+    hist = yf.Ticker(symbol).history(period="1y")
+    closes = hist["Close"].dropna() if hist is not None and "Close" in hist else None
+    if closes is not None and len(closes) >= 2:
+        return [float(c) for c in closes.tolist()]
+    raise ValueError("yfinance 종가 데이터 부족")
+
+def get_market_regime(ma_window: int = 200, force: bool = False):
+    """주요 글로벌 지수의 200일선 대비 등락률로 상승장/하락장을 판정한다.
+
+    반환: [{flag, name, symbol, price, ma, diff_pct, is_bull, ok, stale, error}, ...]
+    - 성공값은 _MARKET_REGIME_GOOD_TTL초 동안 캐시(정상값만 저장).
+    - 조회 실패 시 직전 정상값이 있으면 재사용(stale=True)하고, 없으면 ok=False.
+    - force=True면 캐시를 무시하고 강제 재조회.
+    """
+    import time as _time
+    results = []
+    now = _time.time()
+    for item in MARKET_REGIME_INDICES:
+        symbol = item["symbol"]
+        row = {**item, "price": None, "ma": None, "diff_pct": None,
+               "is_bull": None, "ok": False, "stale": False, "error": None}
+
+        cached = _MARKET_REGIME_CACHE.get(symbol)
+        # 신선한 정상 캐시가 있으면 그대로 사용
+        if not force and cached and now - cached["time"] < _MARKET_REGIME_GOOD_TTL:
+            row.update({k: cached[k] for k in ("price", "ma", "diff_pct", "is_bull")})
+            row["ok"] = True
+            results.append(row)
+            continue
+
+        try:
+            try:
+                closes = _fetch_index_closes(symbol)
+            except Exception:
+                # 직접 호출 실패 시 yfinance로 폴백
+                closes = _fetch_index_yfinance(symbol)
+            price = float(closes[-1])
+            window = min(ma_window, len(closes))
+            ma = float(sum(closes[-window:]) / window)
+            diff_pct = ((price - ma) / ma * 100) if ma else 0.0
+            payload = {"price": price, "ma": ma, "diff_pct": diff_pct, "is_bull": price >= ma}
+            _MARKET_REGIME_CACHE[symbol] = {**payload, "time": now}
+            row.update(payload)
+            row["ok"] = True
+        except Exception as e:
+            err = str(e)[:120]
+            print(f"Market regime fetch error ({symbol}): {e}")
+            if cached:  # 직전 정상값 재사용(다소 오래되었을 수 있음)
+                row.update({k: cached[k] for k in ("price", "ma", "diff_pct", "is_bull")})
+                row["ok"] = True
+                row["stale"] = True
+            else:
+                row["error"] = err
         results.append(row)
     return results
 
-def render_market_regime_table():
+def render_market_regime_table(regimes):
     """시장 국면 표를 HTML로 렌더링."""
-    regimes = get_market_regime()
     rows_html = ""
     for r in regimes:
         if r["ok"]:
@@ -175,8 +237,12 @@ def render_market_regime_table():
             price_str = f"{r['price']:,.2f}"
             diff_str = f"{sign}{abs(r['diff_pct']):.2f}%"
             diff_cell = f"<span style='color:{diff_color};font-weight:bold;'>{diff_str}</span>"
+            if r.get("stale"):
+                state_html += " <span style='font-size:10px;color:#f9a825;'>(이전값)</span>"
         else:
-            state_html = "<span style='color:#888;'>⚪ 조회 실패</span>"
+            err = r.get("error")
+            tip = f" title='{err}'" if err else ""
+            state_html = f"<span style='color:#888;'{tip}>⚪ 조회 실패</span>"
             price_str = "-"
             diff_cell = "<span style='color:#888;'>-</span>"
         rows_html += (
@@ -188,6 +254,15 @@ def render_market_regime_table():
             "</tr>"
         )
 
+    # 전부 실패한 경우 안내 문구
+    all_failed = all((not r["ok"]) for r in regimes)
+    footer = ""
+    if all_failed:
+        footer = (
+            "<div style='font-size:11.5px;color:#e57373;margin-top:10px;'>"
+            "⚠️ 지수 데이터를 가져오지 못했습니다. 서버의 인터넷 연결(야후 파이낸스 접근)을 확인하고 "
+            "'🔄 시장 국면 새로고침' 버튼을 눌러 다시 시도해 주세요.</div>"
+        )
     return f"""
 <div style="background-color:#ffffff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 18px;margin-bottom:20px;box-shadow:0 4px 6px rgba(0,0,0,0.05);">
   <div style="font-size:17px;font-weight:bold;color:#03256C;margin-bottom:12px;">
@@ -206,6 +281,7 @@ def render_market_regime_table():
       {rows_html}
     </tbody>
   </table>
+  {footer}
 </div>
 """
 
@@ -546,7 +622,12 @@ st.sidebar.markdown(
 st.markdown("<h2 style='font-size:28px;font-weight:bold;margin-bottom:20px;'>🚀 Real-time Dashboard for Stock Quant Trader</h2>", unsafe_allow_html=True)
 
 # 시장 국면 (지수 200일선 기준) — 현재 시장이 상승장인지 하락장인지 한눈에 표시
-st.markdown(render_market_regime_table(), unsafe_allow_html=True)
+_regime_col1, _regime_col2 = st.columns([5, 1])
+with _regime_col2:
+    _force_regime = st.button("🔄 시장 국면 새로고침", use_container_width=True,
+                              help="지수 데이터를 강제로 다시 조회합니다.")
+_regimes = get_market_regime(force=_force_regime)
+st.markdown(render_market_regime_table(_regimes), unsafe_allow_html=True)
 
 INITIAL_SEED = investment_budget
 INVESTMENT_PERIOD_MONTH = int(os.getenv('INVESTMENT_PERIOD_MONTH', '1'))
