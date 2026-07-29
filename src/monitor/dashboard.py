@@ -117,6 +117,98 @@ def get_stock_name(code: str) -> str:
             
     return code_str
 
+# ── 시장 국면 (지수 200일선 기준) ────────────────────────────────────────────
+# 주요 글로벌 지수를 200일 이동평균선과 비교하여 상승장/하락장을 판정한다.
+# (현재가 ≥ 200일선 → 상승장 / 현재가 < 200일선 → 하락장)
+MARKET_REGIME_INDICES = [
+    {"flag": "🇺🇸", "name": "미국 S&P500", "symbol": "^GSPC"},
+    {"flag": "🇰🇷", "name": "한국 KOSPI", "symbol": "^KS11"},
+    {"flag": "🇭🇰", "name": "홍콩 HSI", "symbol": "^HSI"},
+    {"flag": "🇯🇵", "name": "일본 Nikkei225", "symbol": "^N225"},
+]
+
+@st.cache_data(ttl=3600)
+def get_market_regime(ma_window: int = 200):
+    """주요 글로벌 지수의 200일선 대비 등락률을 계산하여 상승장/하락장을 판정한다.
+
+    반환: [{flag, name, symbol, price, ma, diff_pct, is_bull, ok}, ...]
+    (200일 이동평균선은 하루 단위로 변하므로 1시간 캐시를 적용해 yfinance 부하를 완화한다.)
+    """
+    import yfinance as yf
+    results = []
+    for item in MARKET_REGIME_INDICES:
+        row = {**item, "price": None, "ma": None, "diff_pct": None, "is_bull": None, "ok": False}
+        try:
+            hist = yf.Ticker(item["symbol"]).history(period="1y")
+            closes = hist["Close"].dropna() if hist is not None and "Close" in hist else None
+            if closes is not None and len(closes) >= 2:
+                price = float(closes.iloc[-1])
+                window = min(ma_window, len(closes))
+                ma = float(closes.tail(window).mean())
+                diff_pct = ((price - ma) / ma * 100) if ma else 0.0
+                row.update({
+                    "price": price,
+                    "ma": ma,
+                    "diff_pct": diff_pct,
+                    "is_bull": price >= ma,
+                    "ok": True,
+                })
+        except Exception as e:
+            print(f"Market regime fetch error ({item['symbol']}): {e}")
+        results.append(row)
+    return results
+
+def render_market_regime_table():
+    """시장 국면 표를 HTML로 렌더링."""
+    regimes = get_market_regime()
+    rows_html = ""
+    for r in regimes:
+        if r["ok"]:
+            if r["is_bull"]:
+                state_html = "<span style='color:#2e7d32;font-weight:bold;'>🟢 상승장</span>"
+                diff_color = "#2e7d32"
+                sign = "+" if r["diff_pct"] >= 0 else "−"
+            else:
+                state_html = "<span style='color:#e53935;font-weight:bold;'>🔴 하락장</span>"
+                diff_color = "#e53935"
+                sign = "+" if r["diff_pct"] >= 0 else "−"
+            price_str = f"{r['price']:,.2f}"
+            diff_str = f"{sign}{abs(r['diff_pct']):.2f}%"
+            diff_cell = f"<span style='color:{diff_color};font-weight:bold;'>{diff_str}</span>"
+        else:
+            state_html = "<span style='color:#888;'>⚪ 조회 실패</span>"
+            price_str = "-"
+            diff_cell = "<span style='color:#888;'>-</span>"
+        rows_html += (
+            "<tr style='border-bottom:1px solid #eee;'>"
+            f"<td style='padding:8px 12px;font-weight:600;color:#333;'>{r['flag']} {r['name']}</td>"
+            f"<td style='padding:8px 12px;text-align:center;'>{state_html}</td>"
+            f"<td style='padding:8px 12px;text-align:right;color:#333;'>{price_str}</td>"
+            f"<td style='padding:8px 12px;text-align:right;'>{diff_cell}</td>"
+            "</tr>"
+        )
+
+    return f"""
+<div style="background-color:#ffffff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 18px;margin-bottom:20px;box-shadow:0 4px 6px rgba(0,0,0,0.05);">
+  <div style="font-size:17px;font-weight:bold;color:#03256C;margin-bottom:12px;">
+    🌐 시장 국면 <span style="font-size:12px;color:#888;font-weight:normal;">(지수 200일선 기준)</span>
+  </div>
+  <table style="width:100%;border-collapse:collapse;font-size:14px;">
+    <thead>
+      <tr style="border-bottom:2px solid #e0e0e0;background-color:#f8f9fa;">
+        <th style="text-align:left;padding:8px 12px;color:#555;">시장</th>
+        <th style="text-align:center;padding:8px 12px;color:#555;">상태</th>
+        <th style="text-align:right;padding:8px 12px;color:#555;">지수</th>
+        <th style="text-align:right;padding:8px 12px;color:#555;">200일선 대비</th>
+      </tr>
+    </thead>
+    <tbody>
+      {rows_html}
+    </tbody>
+  </table>
+</div>
+"""
+
 # ── 데이터 로드 (캐시 TTL=10초) ─────────────────────────────────────────────────
 @st.cache_data(ttl=10)
 def get_data(_db_path: str):
@@ -452,6 +544,9 @@ st.sidebar.markdown(
 
 # ── 메인 콘텐츠 ───────────────────────────────────────────────────────────────
 st.markdown("<h2 style='font-size:28px;font-weight:bold;margin-bottom:20px;'>🚀 Real-time Dashboard for Stock Quant Trader</h2>", unsafe_allow_html=True)
+
+# 시장 국면 (지수 200일선 기준) — 현재 시장이 상승장인지 하락장인지 한눈에 표시
+st.markdown(render_market_regime_table(), unsafe_allow_html=True)
 
 INITIAL_SEED = investment_budget
 INVESTMENT_PERIOD_MONTH = int(os.getenv('INVESTMENT_PERIOD_MONTH', '1'))
