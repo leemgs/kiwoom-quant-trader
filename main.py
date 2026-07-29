@@ -16,6 +16,7 @@ from core.notifier import SlackNotifier
 from core.database import TradeDatabase
 from core.risk_manager import MarketRiskManager
 from core.macro_collector import MacroCollector
+from core.market_regime import MarketRegimeFilter
 from strategies.volatility_breakout import VolatilityBreakout
 from strategies.mean_reversion import MeanReversion
 from strategies.trend_following import TrendFollowing
@@ -91,6 +92,15 @@ def load_config() -> dict:
             "min_stock_price": int(os.getenv('EXTREME_GROWTH_MIN_STOCK_PRICE', '2000')),
             "round_trip_cost": float(os.getenv('EXTREME_GROWTH_ROUND_TRIP_COST', '0.005')),
         },
+        # 시장 하락장(bear market) 감지 필터 — 시장 전체가 하락 추세일 때 신규 매수를 중단
+        "market_regime": {
+            "enable": os.getenv('MARKET_REGIME_FILTER_ENABLE', 'true').lower() == 'true',
+            "indices": csv_to_list(os.getenv('MARKET_REGIME_INDICES', '^KS11,^KQ11')),
+            "ma_window": int(os.getenv('MARKET_REGIME_MA_WINDOW', '20')),
+            "crash_threshold": float(os.getenv('MARKET_REGIME_CRASH_THRESHOLD', '0.015')),
+            "cache_ttl": int(os.getenv('MARKET_REGIME_CACHE_TTL', '300')),
+            "aggregation": os.getenv('MARKET_REGIME_AGGREGATION', 'any'),
+        },
     }
 
     # Logging configuration (optional overrides via env)
@@ -146,7 +156,20 @@ def main():
         max_trading_limit=config['trading']['max_trading_limit'],
         db=db
     )
-    
+
+    # 4-1. 시장 하락장(bear market) 필터 초기화
+    regime_cfg = config['trading'].get('market_regime', {})
+    market_regime = None
+    if regime_cfg.get('enable', True):
+        market_regime = MarketRegimeFilter(
+            indices=regime_cfg.get('indices') or ['^KS11', '^KQ11'],
+            ma_window=int(regime_cfg.get('ma_window', 20)),
+            crash_threshold=float(regime_cfg.get('crash_threshold', 0.015)),
+            cache_ttl=int(regime_cfg.get('cache_ttl', 300)),
+            aggregation=regime_cfg.get('aggregation', 'any'),
+        )
+    bear_market_notified = False
+
     # 5. 자동매매 메인 루프
     print("🔍 실시간 시장 감시 모드 진입 (Ubuntu Environment)")
     notifier.send_message("KIS 자동매매 시스템이 시작되었습니다.")
@@ -189,6 +212,25 @@ def main():
             if is_us_trading:
                 us_universe = config.get('trading', {}).get('us_universe', ['AAPL.US', 'MSFT.US', 'GOOGL.US'])
                 active_universe.extend(us_universe)
+            # 시장 하락장(bear market) 확인 — 시장 전체가 하락 추세이면 신규 매수 중단
+            if market_regime is not None:
+                try:
+                    is_bear, bear_reason = market_regime.evaluate()
+                except Exception as e:
+                    logging.warning(f"⚠️ [MarketRegime] 하락장 판정 중 오류: {e}. 매매를 계속 진행합니다.")
+                    is_bear, bear_reason = False, ""
+                if is_bear:
+                    if not bear_market_notified:
+                        logging.warning(f"🐻 [하락장 감지] 시장 전체가 하락 추세이므로 자동매매를 중단합니다. ({bear_reason})")
+                        notifier.send_message(f"🐻 시장 하락장 감지로 신규 매수를 중단합니다.\n{bear_reason}")
+                        bear_market_notified = True
+                    time.sleep(60)
+                    continue
+                elif bear_market_notified:
+                    logging.info(f"🟢 [시장 회복] 하락장에서 벗어나 자동매매를 재개합니다. ({bear_reason})")
+                    notifier.send_message(f"🟢 시장이 하락장에서 회복되어 자동매매를 재개합니다.\n{bear_reason}")
+                    bear_market_notified = False
+
             # 글로벌 리스크 확인
             multiplier = risk_manager.get_trading_multiplier()
             if multiplier > 0:

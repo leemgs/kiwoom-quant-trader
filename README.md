@@ -271,6 +271,12 @@ KIS_ACCOUNT_NO=계좌번호8자리
 | **`EXTREME_GROWTH_BREAKOUT_THRESHOLD`** | 필수 | `0.015` | 스마트 모멘텀 시가 대비 상승률 임계값 | 예: `0.015` (1.5% 상승 시 돌파 신호 확인 시작) |
 | **`EXTREME_GROWTH_MOMENTUM_TICKS`** | 필수 | `3` | 스마트 모멘텀 연속 상승 틱 수 조건 | 가격 이력이 연속으로 N번 올라야 매수 확정 |
 | **`EXTREME_GROWTH_TRAILING_STOP`** | 필수 | `0.015` | 트레일링 스탑 비율 | 예: `0.015` (보유 후 최고점 대비 1.5% 하락 시 매도 청산) |
+| **`MARKET_REGIME_FILTER_ENABLE`** | 선택 | `true` | 시장 하락장 감지 필터 사용 여부 | `true` 시 시장 대표 지수가 하락 추세일 때 신규 매수 중단 (보유 청산은 정상 동작) |
+| **`MARKET_REGIME_INDICES`** | 선택 | `^KS11,^KQ11` | 하락장 판단용 감시 지수 (yfinance 심볼) | 기본값은 코스피(`^KS11`)·코스닥(`^KQ11`). 쉼표로 구분 |
+| **`MARKET_REGIME_MA_WINDOW`** | 선택 | `20` | 추세 판정용 이동평균 기간(일) | 지수 현재가가 이 이평선 아래면 하락 추세로 간주 |
+| **`MARKET_REGIME_CRASH_THRESHOLD`** | 선택 | `0.015` | 당일 급락 판정 임계값 | `0.015` = 지수가 당일 -1.5% 이하로 급락하면 하락 판정 |
+| **`MARKET_REGIME_CACHE_TTL`** | 선택 | `300` | 하락장 판정 결과 캐시(초) | yfinance 호출 부하 및 rate limit 완화용 |
+| **`MARKET_REGIME_AGGREGATION`** | 선택 | `any` | 다중 지수 종합 방식 | `any`: 하나라도 하락 시 중단 / `all`: 모두 하락 시에만 중단 |
 
 *참고: 전략 설정, 대상 종목, 미국 주식 유니버스 및 투자 금액 등 모든 설정은 `.env` 파일에서 수정합니다.*
 

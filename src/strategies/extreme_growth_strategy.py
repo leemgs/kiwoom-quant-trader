@@ -7,6 +7,7 @@ import holidays
 from datetime import datetime, timezone, timedelta
 from .base_strategy import BaseStrategy
 from core.leverage_manager import DynamicLeverageManager
+from core.market_regime import MarketRegimeFilter
 
 class ExtremeGrowthStrategy(BaseStrategy):
     """
@@ -72,7 +73,25 @@ class ExtremeGrowthStrategy(BaseStrategy):
         self.price_history = {}   # code -> deque[float]
         # 종목별 포지션 보유 이후 최고가 (트레일링 스탑 기준가)
         self.trailing_high = {}   # code -> float
-        
+
+        # ─── 시장 하락장(bear market) 필터 ────────────────────────────────────
+        # 코스피/코스닥 등 시장 대표 지수가 하락 추세일 때는 개별 종목 모멘텀 신호가
+        # 뜨더라도 신규 매수를 시도하지 않는다. (보유 포지션 청산은 항상 정상 동작)
+        regime_cfg = config.get('trading', {}).get('market_regime', {})
+        self.market_regime_enable = regime_cfg.get('enable', True)
+        if self.market_regime_enable:
+            self.market_regime = MarketRegimeFilter(
+                indices=regime_cfg.get('indices') or ['^KS11', '^KQ11'],
+                ma_window=int(regime_cfg.get('ma_window', 20)),
+                crash_threshold=float(regime_cfg.get('crash_threshold', 0.015)),
+                cache_ttl=int(regime_cfg.get('cache_ttl', 300)),
+                aggregation=regime_cfg.get('aggregation', 'any'),
+            )
+        else:
+            self.market_regime = None
+        # 하락장으로 인한 매수 중단 상태 로그 스팸 방지용 플래그
+        self._bear_market_logged = False
+
     def get_real_cash_balance(self):
         """실제 계좌 예수금(현금) 조회 (30초 캐시 적용, 오류 시 기존 캐시 재사용 혹은 초기자본 반환)"""
         now = time.time()
@@ -523,6 +542,28 @@ class ExtremeGrowthStrategy(BaseStrategy):
             # 보유 포지션 실시간 익절/손절 감시
             for code in list(self.positions.keys()):
                 self.monitor_position(code)
+
+            # ── 시장 하락장(bear market) 게이트 ──────────────────────────────
+            # 시장 대표 지수가 하락 추세이면 신규 매수를 전면 중단한다.
+            # (보유 포지션 청산은 위에서 이미 처리되므로 하락장에도 정상 동작한다.)
+            if self.market_regime is not None:
+                try:
+                    is_bear, bear_reason = self.market_regime.evaluate()
+                except Exception as e:
+                    logging.warning(f"⚠️ [MarketRegime] 하락장 판정 중 오류: {e}. 신규 매수를 계속 진행합니다.")
+                    is_bear, bear_reason = False, ""
+                if is_bear:
+                    if not self._bear_market_logged:
+                        logging.warning(f"🐻 [하락장 감지] 시장 전체가 하락 추세이므로 신규 매수를 중단합니다. ({bear_reason})")
+                        self._bear_market_logged = True
+                    # 신규 매수 유니버스 루프를 건너뛰고 다음 주기로 (보유 포지션 감시는 계속 유지)
+                    gc.collect()
+                    time.sleep(2.0)
+                    continue
+                elif self._bear_market_logged:
+                    # 하락장 → 정상장 복귀
+                    logging.info(f"🟢 [시장 회복] 하락장에서 벗어나 신규 매수를 재개합니다. ({bear_reason})")
+                    self._bear_market_logged = False
 
             for code in self.universe:
                 # 이미 보유한 종목은 스킵
