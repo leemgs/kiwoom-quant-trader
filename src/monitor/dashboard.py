@@ -549,8 +549,9 @@ status_color = "#2e7d32" if is_kor_trading else "#555555"
 trading_type_str = "모의" if is_virtual else "실전"
 trading_type_color = "#2e7d32" if is_virtual else "#e53935"
 
-st.sidebar.markdown(
-    f"""
+# 계좌/상태 정보 패널 HTML — 사이드바를 간결하게 유지하기 위해 여기서는 렌더링하지
+# 않고, '🎯 수익 도전 현황' 섹션에서 출력한다. (사이드바 스크롤 없이 메뉴 접근성 개선)
+account_panel_html = f"""
 <div style='background-color:#ffffff;padding:15px;border-radius:10px;text-align:center;margin-bottom:15px;border:1px solid #e0e0e0;box-shadow:0 4px 6px rgba(0,0,0,0.05);'>
 <h3 style='color:#03256C;margin:0 0 3px 0;font-weight:900;letter-spacing:1px;'>한국투자증권</h3>
 <p style='color:#666;font-size:11px;margin:0 0 10px 0;font-weight:600;'>KOREA INVESTMENT &amp; SECURITIES</p>
@@ -574,11 +575,9 @@ st.sidebar.markdown(
 <p style="margin:0 0 5px 0;font-size:13px;"><strong>증권 계좌 예수금 (현금):</strong> <code style="font-weight:bold;">{account_balance_str}</code></p>
 <p style="margin:0 0 15px 0;font-size:13px;"><strong>{system_profit_label}:</strong> <code style="color:{'#e53935' if system_profit < 0 else '#2e7d32' if system_profit > 0 else '#333'};font-weight:bold;">{system_profit:+,}원</code></p>
 </div>
-""",
-    unsafe_allow_html=True
-)
+"""
 
-# ── 네비게이션 메뉴 (섹션 선택) ────────────────────────────────────────────────
+# ── 네비게이션 메뉴 (섹션 선택) — 사이드바 최상단 배치 ────────────────────────
 # URL 쿼리 파라미터에 저장된 선택값으로 초기화하여 자동 새로고침에도 유지한다.
 _default_idx = 0
 _qp_view = _get_query_param("view")
@@ -747,6 +746,8 @@ if selected_menu == "🌐 시장 국면":
     st.markdown(render_market_regime_table(_regimes), unsafe_allow_html=True)
 
 elif selected_menu == "🎯 수익 도전 현황":
+    # 계좌/봇 상태 정보 패널 (사이드바에서 이전됨)
+    st.markdown(account_panel_html, unsafe_allow_html=True)
     st.subheader(f"🎯 {INVESTMENT_PERIOD_MONTH}개월 수익 도전 ({INITIAL_SEED:,}원 → {TARGET_GOAL:,.0f}원)")
     progress = min(1.0, max(0.0, display_current_total / TARGET_GOAL))
     st.progress(progress)
