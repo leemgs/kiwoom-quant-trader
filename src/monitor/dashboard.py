@@ -632,15 +632,30 @@ selected_menu = st.sidebar.radio(
 )
 # 현재 선택을 쿼리 파라미터에 반영 (다음 자동 새로고침 시 복원용)
 _set_query_param("view", str(MENU_ITEMS.index(selected_menu)))
+st.sidebar.markdown("---")
 
-# 새로고침 간격은 쿼리 파라미터(refresh)로 영속화하여, '수익 도전 현황' 이외의
-# 메뉴에서도 하단 자동 새로고침(meta refresh)이 정상 동작하도록 한다.
-# 슬라이더 위젯 자체는 '🎯 수익 도전 현황' 섹션에서 렌더링한다.
+# 새로고침 간격 슬라이더 (사이드바에 상시 배치). 값은 쿼리 파라미터(refresh)로
+# 영속화하여 자동 새로고침(meta refresh)의 전체 리로드 후에도 유지되도록 한다.
 try:
-    refresh_rate = int(_get_query_param("refresh", "30"))
+    _cur_rate = int(_get_query_param("refresh", "30"))
 except (ValueError, TypeError):
-    refresh_rate = 30
-refresh_rate = min(60, max(5, refresh_rate))
+    _cur_rate = 30
+_cur_rate = min(60, max(5, _cur_rate))
+refresh_rate = st.sidebar.slider("새로고침 간격(초)", 5, 60, _cur_rate)
+if refresh_rate != _cur_rate:
+    _set_query_param("refresh", str(refresh_rate))
+
+# 프로젝트 공식 홈페이지 링크
+st.sidebar.markdown(
+    """
+    <a href="https://leemgs.github.io/stock-quant-trader-kis/" target="_blank" style="text-decoration:none;">
+        <div style='background-color:#f8f9fa;color:#333;padding:10px;border-radius:6px;text-align:center;border:1px solid #ddd;font-weight:bold;font-size:14px;margin-top:8px;'>
+            🏠 프로젝트 공식 홈페이지
+        </div>
+    </a>
+    """,
+    unsafe_allow_html=True
+)
 
 # ── 공통 계산 (요약 KPI 및 각 섹션 공용) ──────────────────────────────────────
 INITIAL_SEED = investment_budget
@@ -752,24 +767,6 @@ elif selected_menu == "🎯 수익 도전 현황":
     expander_title = f"⏰ {now.strftime('%Y-%m-%d %H:%M')} (한국:{'휴일' if is_kor_holiday else '평일'}, 미국:{'휴일' if is_us_holiday else '평일'}) ℹ️"
     with st.expander(expander_title):
         st.markdown(MARKET_HOURS_TABLE_HTML, unsafe_allow_html=True)
-
-    # 새로고침 간격 (변경 시 쿼리 파라미터에 영속화 → 다른 메뉴/자동 새로고침에도 반영)
-    _new_rate = st.slider("새로고침 간격(초)", 5, 60, refresh_rate)
-    if _new_rate != refresh_rate:
-        _set_query_param("refresh", str(_new_rate))
-        refresh_rate = _new_rate
-
-    # 프로젝트 공식 홈페이지
-    st.markdown(
-        """
-        <a href="https://leemgs.github.io/stock-quant-trader-kis/" target="_blank" style="text-decoration:none;">
-            <div style='background-color:#f8f9fa;color:#333;padding:10px;border-radius:6px;text-align:center;border:1px solid #ddd;font-weight:bold;font-size:14px;max-width:320px;'>
-                🏠 프로젝트 공식 홈페이지
-            </div>
-        </a>
-        """,
-        unsafe_allow_html=True
-    )
 
 elif selected_menu == "📈 Cumulative Equity Curve":
     st.subheader("📈 Cumulative Equity Curve")
