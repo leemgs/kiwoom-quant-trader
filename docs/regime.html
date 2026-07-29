@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>실시간 시장 국면 - Stock Quant Trader</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Outfit:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        .regime-wrap { max-width: 900px; margin: 0 auto; }
+        .regime-card {
+            background:#fff; border:1px solid #e6e6e6; border-radius:12px;
+            padding:20px 22px; box-shadow:0 6px 18px rgba(0,0,0,0.06); margin-top:24px;
+        }
+        .regime-title { font-size:20px; font-weight:800; color:#03256C; margin:0 0 4px 0; }
+        .regime-sub { font-size:13px; color:#888; margin:0 0 16px 0; }
+        table.regime { width:100%; border-collapse:collapse; font-size:15px; }
+        table.regime th { text-align:left; padding:10px 12px; color:#555; border-bottom:2px solid #e0e0e0; background:#f8f9fa; }
+        table.regime td { padding:11px 12px; border-bottom:1px solid #eee; }
+        table.regime td.num { text-align:right; font-variant-numeric:tabular-nums; }
+        .bull { color:#2e7d32; font-weight:700; }
+        .bear { color:#e53935; font-weight:700; }
+        .muted { color:#999; }
+        .stale { font-size:11px; color:#f9a825; }
+        .updated { font-size:12px; color:#888; margin-top:14px; text-align:right; }
+        .refresh-btn {
+            border:1px solid #ccc; background:#fff; border-radius:8px; padding:6px 12px;
+            font-size:13px; cursor:pointer; color:#333;
+        }
+        .refresh-btn:hover { background:#f2f2f2; }
+        .legend { font-size:12px; color:#666; margin-top:6px; }
+    </style>
+</head>
+<body>
+    <header id="main-header">
+        <nav class="container">
+            <div class="logo"><a href="index.html" style="text-decoration:none; color:inherit;">Stock Quant <span>Trader</span></a></div>
+            <ul class="nav-links">
+                <li><a href="regime.html">시장국면</a></li>
+                <li><a href="features.html">주요기능</a></li>
+                <li><a href="high_profit.html">핵심가이드</a></li>
+                <li><a href="installation.html">설치방법</a></li>
+                <li><a href="manual.html">사용자매뉴얼</a></li>
+                <li><a href="strategy.html">수익전략</a></li>
+                <li><a href="https://github.com/leemgs/stock-quant-trader-kis" class="btn-github">GitHub</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <section class="container section">
+        <div class="regime-wrap">
+            <div class="regime-card">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                    <div>
+                        <p class="regime-title">🌐 실시간 시장 국면</p>
+                        <p class="regime-sub">주요 글로벌 지수의 <b>200일 이동평균선</b> 기준 상승장/하락장 판정</p>
+                    </div>
+                    <button class="refresh-btn" onclick="loadRegime()">🔄 새로고침</button>
+                </div>
+
+                <table class="regime">
+                    <thead>
+                        <tr>
+                            <th>시장</th>
+                            <th style="text-align:center;">상태</th>
+                            <th style="text-align:right;">지수</th>
+                            <th style="text-align:right;">200일선 대비</th>
+                        </tr>
+                    </thead>
+                    <tbody id="regime-body">
+                        <tr><td colspan="4" class="muted" style="text-align:center;padding:24px;">데이터를 불러오는 중…</td></tr>
+                    </tbody>
+                </table>
+
+                <p class="legend">🟢 상승장 = 현재가가 200일선 이상 &nbsp;·&nbsp; 🔴 하락장 = 현재가가 200일선 미만</p>
+                <p class="updated" id="regime-updated"></p>
+            </div>
+        </div>
+    </section>
+
+    <footer id="main-footer">
+        <div class="container">
+            <p>&copy; 2026 Stock Quant Trader. 모든 권리 보유.</p>
+            <p class="disclaimer" style="margin-top:1rem; font-size:0.85rem; color:var(--text-muted);">⚠️ <strong>면책 조항:</strong> 본 지표는 투자 참고용이며 특정 수익을 보장하지 않습니다. 투자 판단과 책임은 전적으로 사용자 본인에게 있습니다.</p>
+        </div>
+    </footer>
+
+    <script src="regime.js"></script>
+</body>
+</html>
