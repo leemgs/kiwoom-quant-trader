@@ -31,6 +31,48 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+# ── 네비게이션 메뉴 정의 및 쿼리 파라미터 헬퍼 ──────────────────────────────
+# 대시보드 내용을 한 화면에 모두 나열하지 않고, 사이드바 메뉴로 섹션을 선택해
+# 스크롤 없이 열람할 수 있도록 한다. 선택 상태는 URL 쿼리 파라미터(view)에
+# 저장하여, 30초 자동 새로고침(meta refresh)에도 선택한 메뉴가 유지되도록 한다.
+MENU_ITEMS = [
+    "🌐 시장 국면",
+    "🎯 수익 도전 현황",
+    "📈 Cumulative Equity Curve",
+    "📋 Recent Trade History",
+    "🔥 Profit/Loss Heatmap",
+    "🤖 Gemini AI Investment Insights",
+    "🖥️ System Activity Logs",
+]
+
+def _get_query_param(key, default=None):
+    """Streamlit 버전에 무관하게 쿼리 파라미터 값을 읽는다."""
+    try:  # Streamlit >= 1.30
+        val = st.query_params.get(key)
+        if val is not None:
+            return val
+    except Exception:
+        pass
+    try:  # Streamlit < 1.30
+        vals = st.experimental_get_query_params().get(key)
+        if vals:
+            return vals[0]
+    except Exception:
+        pass
+    return default
+
+def _set_query_param(key, value):
+    """Streamlit 버전에 무관하게 쿼리 파라미터 값을 설정한다."""
+    try:  # Streamlit >= 1.30
+        st.query_params[key] = value
+        return
+    except Exception:
+        pass
+    try:  # Streamlit < 1.30
+        st.experimental_set_query_params(**{key: value})
+    except Exception:
+        pass
+
 # ── 환경변수 ────────────────────────────────────────────────────────────────────
 kis_account_no = os.getenv('KIS_ACCOUNT_NO', 'Unknown')
 kis_account_suffix = os.getenv('KIS_ACCOUNT_SUFFIX', '01')
@@ -536,6 +578,28 @@ st.sidebar.markdown(
     unsafe_allow_html=True
 )
 
+# ── 네비게이션 메뉴 (섹션 선택) ────────────────────────────────────────────────
+# URL 쿼리 파라미터에 저장된 선택값으로 초기화하여 자동 새로고침에도 유지한다.
+_default_idx = 0
+_qp_view = _get_query_param("view")
+if _qp_view is not None:
+    try:
+        _i = int(_qp_view)
+        if 0 <= _i < len(MENU_ITEMS):
+            _default_idx = _i
+    except (ValueError, TypeError):
+        pass
+if "nav_view" not in st.session_state:
+    st.session_state["nav_view"] = MENU_ITEMS[_default_idx]
+
+st.sidebar.markdown("#### 📂 메뉴")
+selected_menu = st.sidebar.radio(
+    "메뉴 선택", MENU_ITEMS, key="nav_view", label_visibility="collapsed"
+)
+# 현재 선택을 쿼리 파라미터에 반영 (다음 자동 새로고침 시 복원용)
+_set_query_param("view", str(MENU_ITEMS.index(selected_menu)))
+st.sidebar.markdown("---")
+
 # 실전 모드 손익 초기화
 if not is_virtual:
     if 'show_reset_confirm' not in st.session_state:
@@ -619,22 +683,17 @@ st.sidebar.markdown(
 )
 
 # ── 메인 콘텐츠 ───────────────────────────────────────────────────────────────
-st.markdown("<h2 style='font-size:28px;font-weight:bold;margin-bottom:20px;'>🚀 Real-time Dashboard for Stock Quant Trader</h2>", unsafe_allow_html=True)
+st.markdown(
+    f"<h2 style='font-size:28px;font-weight:bold;margin-bottom:6px;'>🚀 Real-time Dashboard for Stock Quant Trader</h2>"
+    f"<p style='color:#888;font-size:13px;margin:0 0 16px 0;'>현재 메뉴: <b>{selected_menu}</b></p>",
+    unsafe_allow_html=True
+)
 
-# 시장 국면 (지수 200일선 기준) — 현재 시장이 상승장인지 하락장인지 한눈에 표시
-_regime_col1, _regime_col2 = st.columns([5, 1])
-with _regime_col2:
-    _force_regime = st.button("🔄 시장 국면 새로고침", use_container_width=True,
-                              help="지수 데이터를 강제로 다시 조회합니다.")
-_regimes = get_market_regime(force=_force_regime)
-st.markdown(render_market_regime_table(_regimes), unsafe_allow_html=True)
-
+# ── 공통 계산 (요약 KPI 및 각 섹션 공용) ──────────────────────────────────────
 INITIAL_SEED = investment_budget
 INVESTMENT_PERIOD_MONTH = int(os.getenv('INVESTMENT_PERIOD_MONTH', '1'))
 INVESTMENT_INCOME_GOAL = float(os.getenv('INVESTMENT_INCOME_GOAL', '100000'))
 TARGET_GOAL = INVESTMENT_INCOME_GOAL
-
-col1, col2, col3, col4 = st.columns(4)
 
 if not is_virtual:
     display_profit = system_profit
@@ -657,6 +716,8 @@ else:
 unfilled_buy = 0
 unfilled_sell = 0
 
+# ── 항상 표시되는 요약 KPI 행 (스크롤 없이 핵심 지표 확인) ────────────────────
+col1, col2, col3, col4 = st.columns(4)
 with col1:
     st.metric("총 거래 횟수", f"{total_trades}회")
     st.markdown(f"""
@@ -670,29 +731,41 @@ col3.metric("누적 손익", f"{display_profit:,.0f}원", delta=f"{display_profi
 col4.metric("목표 달성률", f"{(display_profit/TARGET_GOAL)*100:.1f}%")
 
 st.divider()
-st.subheader(f"🎯 {INVESTMENT_PERIOD_MONTH}개월 수익 도전 ({INITIAL_SEED:,}원 → {TARGET_GOAL:,}원)")
-progress = min(1.0, max(0.0, display_current_total / TARGET_GOAL))
-st.progress(progress)
-st.write(f"현재 총 자산: **{display_current_total:,.0f}원** / 목표 자산: **{TARGET_GOAL:,.0f}원**")
 
-if not df.empty:
+# ── 선택된 메뉴에 해당하는 섹션만 렌더링 (스크롤 최소화) ──────────────────────
+if selected_menu == "🌐 시장 국면":
+    _regime_col1, _regime_col2 = st.columns([5, 1])
+    with _regime_col2:
+        _force_regime = st.button("🔄 시장 국면 새로고침", use_container_width=True,
+                                  help="지수 데이터를 강제로 다시 조회합니다.")
+    _regimes = get_market_regime(force=_force_regime)
+    st.markdown(render_market_regime_table(_regimes), unsafe_allow_html=True)
+
+elif selected_menu == "🎯 수익 도전 현황":
+    st.subheader(f"🎯 {INVESTMENT_PERIOD_MONTH}개월 수익 도전 ({INITIAL_SEED:,}원 → {TARGET_GOAL:,.0f}원)")
+    progress = min(1.0, max(0.0, display_current_total / TARGET_GOAL))
+    st.progress(progress)
+    st.write(f"현재 총 자산: **{display_current_total:,.0f}원** / 목표 자산: **{TARGET_GOAL:,.0f}원**")
+
+elif selected_menu == "📈 Cumulative Equity Curve":
     st.subheader("📈 Cumulative Equity Curve")
-    df_chart = df[['timestamp', 'profit']].copy()
-    df_chart['timestamp'] = pd.to_datetime(df_chart['timestamp'])
-    df_chart = df_chart.sort_values('timestamp')
-    df_chart['cum_profit'] = df_chart['profit'].cumsum()
-    df_chart['timestamp'] = df_chart['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
+    if not df.empty:
+        df_chart = df[['timestamp', 'profit']].copy()
+        df_chart['timestamp'] = pd.to_datetime(df_chart['timestamp'])
+        df_chart = df_chart.sort_values('timestamp')
+        df_chart['cum_profit'] = df_chart['profit'].cumsum()
+        df_chart['timestamp'] = df_chart['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
+        fig_curve = px.line(df_chart, x='timestamp', y='cum_profit', title='누적 수익률 추이')
+        st.plotly_chart(fig_curve, use_container_width=True)
+        del fig_curve  # 즉시 해제하여 메모리 절약
+    else:
+        st.warning("아직 거래 내역이 없습니다. 시스템이 거래를 시작하면 차트가 활성화됩니다.")
 
-    fig_curve = px.line(df_chart, x='timestamp', y='cum_profit', title='누적 수익률 추이')
-    st.plotly_chart(fig_curve, use_container_width=True)
-    del fig_curve  # 즉시 해제하여 메모리 절약
-
-    col_left, col_right = st.columns(2)
-
-    with col_left:
-        col_trade_title, col_trade_btn = st.columns([3, 1.2])
-        with col_trade_title:
-            st.subheader("📋 Recent Trade History")
+elif selected_menu == "📋 Recent Trade History":
+    col_trade_title, col_trade_btn = st.columns([3, 1.2])
+    with col_trade_title:
+        st.subheader("📋 Recent Trade History")
+    if not df.empty:
         with col_trade_btn:
             csv_data = df.to_csv(index=False).encode('utf-8')
             st.download_button(
@@ -702,10 +775,13 @@ if not df.empty:
                 mime="text/csv",
                 use_container_width=True
             )
-        st.dataframe(df.sort_values('timestamp', ascending=False).head(10), use_container_width=True)
+        st.dataframe(df.sort_values('timestamp', ascending=False).head(20), use_container_width=True)
+    else:
+        st.warning("아직 거래 내역이 없습니다. 시스템이 거래를 시작하면 상세 내역이 활성화됩니다.")
 
-    with col_right:
-        st.subheader("🔥 Profit/Loss Heatmap")
+elif selected_menu == "🔥 Profit/Loss Heatmap":
+    st.subheader("🔥 Profit/Loss Heatmap")
+    if not df.empty:
         df_group = df.groupby('code', as_index=False)['profit'].sum()
         df_group['abs_profit'] = df_group['profit'].abs().fillna(0)
         # To avoid ZeroDivisionError in plotly's weighted average when weights sum to zero for any group,
@@ -716,51 +792,49 @@ if not df.empty:
                               hover_data=['profit'])
         st.plotly_chart(fig_heat, use_container_width=True)
         del fig_heat  # 즉시 해제
+    else:
+        st.warning("아직 거래 내역이 없습니다. 시스템이 거래를 시작하면 히트맵이 활성화됩니다.")
 
-    st.divider()
+elif selected_menu == "🤖 Gemini AI Investment Insights":
     st.subheader("🤖 Gemini AI Investment Insights")
-    if st.button("AI 매매 복기 생성"):
+    if df.empty:
+        st.warning("아직 거래 내역이 없습니다. 매매 기록이 쌓이면 AI 복기를 생성할 수 있습니다.")
+    elif st.button("AI 매매 복기 생성"):
         from analytics.ai_journal import AITradingJournal
         api_key = os.getenv("GEMINI_API_KEY", "")
         journal = AITradingJournal(api_key)
         with st.spinner("AI가 오늘의 매매를 분석 중입니다..."):
             review = journal.generate_review(df, "Nasdaq: +1.2%, USD/KRW: -0.5%")
             st.info(review)
-else:
-    st.warning("아직 거래 내역이 없습니다. 시스템이 거래를 시작하면 차트와 상세 내역이 활성화됩니다.")
 
-# ── 시스템 로그 ───────────────────────────────────────────────────────────────
-st.divider()
+elif selected_menu == "🖥️ System Activity Logs":
+    col_log_title, col_log_btn = st.columns([4, 1])
+    with col_log_title:
+        st.subheader("🖥️ System Activity Logs (실시간 시스템 로그)")
+    with col_log_btn:
+        log_file_path = "logs/trading.log"
+        if os.path.exists(log_file_path):
+            try:
+                with open(log_file_path, "r", encoding="utf-8") as f:
+                    log_content = f.read()
+                st.download_button(
+                    label="로그 다운로드 💾",
+                    data=log_content,
+                    file_name=f"trading_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                    mime="text/plain",
+                    use_container_width=True
+                )
+            except Exception:
+                pass
 
-col_log_title, col_log_btn = st.columns([4, 1])
-with col_log_title:
-    st.subheader("🤖 System Activity Logs (실시간 시스템 로그)")
-
-with col_log_btn:
-    log_file_path = "logs/trading.log"
-    if os.path.exists(log_file_path):
-        try:
-            with open(log_file_path, "r", encoding="utf-8") as f:
-                log_content = f.read()
-            st.download_button(
-                label="로그 다운로드 💾",
-                data=log_content,
-                file_name=f"trading_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                mime="text/plain",
-                use_container_width=True
-            )
-        except Exception:
-            pass
-
-log_lines = get_recent_logs()
-formatted_html = format_logs_to_html(log_lines)
-
-log_box_html = f"""
+    log_lines = get_recent_logs()
+    formatted_html = format_logs_to_html(log_lines)
+    log_box_html = f"""
 <div style="
     background-color:#1e1e1e;
     padding:15px;
     border-radius:8px;
-    height:350px;
+    height:450px;
     overflow-y:auto;
     border:1px solid #333;
     box-shadow:inset 0 0 10px rgba(0,0,0,0.5);
@@ -769,7 +843,7 @@ log_box_html = f"""
 </div>
 <p style="font-size:11px;color:#888;margin-top:5px;text-align:right;">※ 최신 로그가 상단에 표시됩니다. (새로고침 간격: {refresh_rate}초)</p>
 """
-st.markdown(log_box_html, unsafe_allow_html=True)
+    st.markdown(log_box_html, unsafe_allow_html=True)
 
 # ── 메모리 정리 후 자동 새로고침 ─────────────────────────────────────────────
 # time.sleep() + st.rerun() 패턴은 매 실행마다 메모리를 쌓는 원인.
