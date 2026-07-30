@@ -47,7 +47,7 @@ MENU_ITEMS = [
 
 # 거래 시간 안내 표 (사이드바 대신 '수익 도전 현황' 섹션의 expander에서 사용)
 MARKET_HOURS_TABLE_HTML = """
-<table style="width:100%;border-collapse:collapse;font-size:11.5px;margin-top:5px;border:1px solid #e0e0e0;border-radius:6px;">
+<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:5px;border:1px solid #e0e0e0;border-radius:6px;">
   <thead>
     <tr style="border-bottom:2px solid #e0e0e0;background-color:#f8f9fa;">
       <th style="text-align:left;padding:6px;font-weight:bold;color:#333;">구분</th>
@@ -58,8 +58,8 @@ MARKET_HOURS_TABLE_HTML = """
   <tbody>
     <tr style="border-bottom:1px solid #eee;">
       <td style="padding:6px;font-weight:bold;color:#555;background-color:#fafafa;">운영 요일</td>
-      <td style="text-align:center;padding:6px;color:#333;">월 ~ 금<br><span style="font-size:9.5px;color:#888;">(공휴일 제외)</span></td>
-      <td style="text-align:center;padding:6px;color:#333;">월 ~ 금<br><span style="font-size:9.5px;color:#888;">(공휴일 제외)</span></td>
+      <td style="text-align:center;padding:6px;color:#333;">월 ~ 금<br><span style="font-size:11px;color:#888;">(공휴일 제외)</span></td>
+      <td style="text-align:center;padding:6px;color:#333;">월 ~ 금<br><span style="font-size:11px;color:#888;">(공휴일 제외)</span></td>
     </tr>
     <tr style="border-bottom:1px solid #eee;">
       <td style="padding:6px;font-weight:bold;color:#555;background-color:#fafafa;">개장 준비</td>
@@ -73,7 +73,7 @@ MARKET_HOURS_TABLE_HTML = """
     </tr>
     <tr>
       <td style="padding:6px;font-weight:bold;color:#555;background-color:#fafafa;">강제 청산</td>
-      <td style="text-align:center;padding:6px;color:#e53935;font-weight:bold;">15:15<br><span style="font-size:9.5px;font-weight:normal;color:#e53935;">(미수 방지)</span></td>
+      <td style="text-align:center;padding:6px;color:#e53935;font-weight:bold;">15:15<br><span style="font-size:11px;font-weight:normal;color:#e53935;">(미수 방지)</span></td>
       <td style="text-align:center;padding:6px;color:#777;">-</td>
     </tr>
   </tbody>
@@ -336,7 +336,7 @@ def render_market_regime_table(regimes):
     footer = ""
     if all_failed:
         footer = (
-            "<div style='font-size:11.5px;color:#e57373;margin-top:10px;'>"
+            "<div style='font-size:12px;color:#e57373;margin-top:10px;'>"
             "⚠️ 지수 데이터를 가져오지 못했습니다. 서버의 인터넷 연결(야후 파이낸스 접근)을 확인하고 "
             "'🔄 시장 국면 새로고침' 버튼을 눌러 다시 시도해 주세요.</div>"
         )
@@ -587,12 +587,13 @@ trading_type_color = "#2e7d32" if is_virtual else "#e53935"
 # 계좌/상태 정보 패널 HTML — 사이드바를 간결하게 유지하기 위해 여기서는 렌더링하지
 # 않고, '🎯 수익 도전 현황' 섹션에서 출력한다. (사이드바 스크롤 없이 메뉴 접근성 개선)
 # 증권사 브랜딩 헤더는 별도 변수로 분리하여 섹션의 '맨 아래'에 렌더링한다.
+# 폰트 스케일 통일: 제목 16px · 본문 14px · 보조 12px
 bank_header_html = """
 <div style='background-color:#ffffff;padding:15px;border-radius:10px;text-align:center;margin-bottom:15px;border:1px solid #e0e0e0;box-shadow:0 4px 6px rgba(0,0,0,0.05);'>
-<h3 style='color:#03256C;margin:0 0 3px 0;font-weight:900;letter-spacing:1px;'>한국투자증권</h3>
-<p style='color:#666;font-size:11px;margin:0 0 10px 0;font-weight:600;'>KOREA INVESTMENT &amp; SECURITIES</p>
+<h3 style='color:#03256C;margin:0 0 3px 0;font-size:16px;font-weight:900;letter-spacing:1px;'>한국투자증권</h3>
+<p style='color:#666;font-size:12px;margin:0 0 10px 0;font-weight:600;'>KOREA INVESTMENT &amp; SECURITIES</p>
 <a href='https://apiportal.koreainvestment.com/' target='_blank' style='text-decoration:none;'>
-<div style='background-color:#03256C;color:white;padding:6px 10px;border-radius:6px;font-size:12px;font-weight:bold;'>
+<div style='background-color:#03256C;color:white;padding:6px 10px;border-radius:6px;font-size:14px;font-weight:bold;'>
 🚀 KIS Developers (Open API)
 </div>
 </a>
@@ -602,16 +603,16 @@ bank_header_html = """
 account_panel_html = f"""
 <div style="margin-bottom:10px;">
 <h4 style="margin:0 0 8px 0;font-size:16px;">💎 Trading Bot Control</h4>
-<div style="background-color:{status_bg};padding:8px;border-radius:5px;color:{status_color};font-size:13px;font-weight:bold;margin-bottom:10px;line-height:1.5;">
+<div style="background-color:{status_bg};padding:8px;border-radius:5px;color:{status_color};font-size:14px;font-weight:bold;margin-bottom:10px;line-height:1.6;">
 시스템 상태: 🟢 가동 중<br>
 자동매매 상태: {'⚔️ 전투 중' if is_any_trading else '💤 휴식 중'} (한국:{'O' if not is_kor_holiday else 'X'}, 미국:{'O' if not is_us_holiday else 'X'})
 </div>
-<p style="margin:0 0 5px 0;font-size:13px;"><strong>KIS Account:</strong> <code>{kis_account_no}-{kis_account_suffix}</code></p>
-<p style="margin:0 0 5px 0;font-size:13px;"><strong>투자 운영 종류:</strong> <code style="color:{trading_type_color};font-weight:bold;">{trading_type_str}</code></p>
-<p style="margin:0 0 5px 0;font-size:13px;"><strong>투자 운영 금액 (원금):</strong> <code>{investment_budget:,}원</code></p>
-<p style="margin:0 0 5px 0;font-size:13px;"><strong>투자 운영 결과 (실제 총자산):</strong> <code style="color:{'#e53935' if real_total_assets < investment_budget else '#2e7d32' if real_total_assets > investment_budget else '#333'};font-weight:bold;">{real_total_assets:,}원</code></p>
-<p style="margin:0 0 5px 0;font-size:13px;"><strong>증권 계좌 예수금 (현금):</strong> <code style="font-weight:bold;">{account_balance_str}</code></p>
-<p style="margin:0 0 15px 0;font-size:13px;"><strong>{system_profit_label}:</strong> <code style="color:{'#e53935' if system_profit < 0 else '#2e7d32' if system_profit > 0 else '#333'};font-weight:bold;">{system_profit:+,}원</code></p>
+<p style="margin:0 0 6px 0;font-size:14px;"><strong>KIS Account:</strong> <code>{kis_account_no}-{kis_account_suffix}</code></p>
+<p style="margin:0 0 6px 0;font-size:14px;"><strong>투자 운영 종류:</strong> <code style="color:{trading_type_color};font-weight:bold;">{trading_type_str}</code></p>
+<p style="margin:0 0 6px 0;font-size:14px;"><strong>투자 운영 금액 (원금):</strong> <code>{investment_budget:,}원</code></p>
+<p style="margin:0 0 6px 0;font-size:14px;"><strong>투자 운영 결과 (실제 총자산):</strong> <code style="color:{'#e53935' if real_total_assets < investment_budget else '#2e7d32' if real_total_assets > investment_budget else '#333'};font-weight:bold;">{real_total_assets:,}원</code></p>
+<p style="margin:0 0 6px 0;font-size:14px;"><strong>증권 계좌 예수금 (현금):</strong> <code style="font-weight:bold;">{account_balance_str}</code></p>
+<p style="margin:0 0 15px 0;font-size:14px;"><strong>{system_profit_label}:</strong> <code style="color:{'#e53935' if system_profit < 0 else '#2e7d32' if system_profit > 0 else '#333'};font-weight:bold;">{system_profit:+,}원</code></p>
 </div>
 """
 
@@ -727,14 +728,23 @@ if selected_menu == "🌐 시장 국면":
 elif selected_menu == "🎯 수익 도전 현황":
     # 계좌/봇 상태 정보 패널 (사이드바에서 이전됨)
     st.markdown(account_panel_html, unsafe_allow_html=True)
-    st.subheader(f"🎯 {INVESTMENT_PERIOD_MONTH}개월 수익 도전 ({INITIAL_SEED:,}원 → {TARGET_GOAL:,.0f}원)")
+    # 통일된 폰트 스케일(제목 16px · 본문 14px)로 렌더링 — Streamlit 기본 제목/본문 크기 편차 제거
+    st.markdown(
+        f"<h4 style='margin:0 0 8px 0;font-size:16px;'>🎯 {INVESTMENT_PERIOD_MONTH}개월 수익 도전 "
+        f"({INITIAL_SEED:,}원 → {TARGET_GOAL:,.0f}원)</h4>",
+        unsafe_allow_html=True
+    )
     progress = min(1.0, max(0.0, display_current_total / TARGET_GOAL))
     st.progress(progress)
-    st.write(f"현재 총 자산: **{display_current_total:,.0f}원** / 목표 자산: **{TARGET_GOAL:,.0f}원**")
+    st.markdown(
+        f"<p style='font-size:14px;margin:6px 0 0 0;'>현재 총 자산: <b>{display_current_total:,.0f}원</b> "
+        f"/ 목표 자산: <b>{TARGET_GOAL:,.0f}원</b></p>",
+        unsafe_allow_html=True
+    )
 
     # ── 설정 및 정보 (사이드바에서 이전됨) ──────────────────────────────────
     st.divider()
-    st.markdown("#### ⚙️ 설정 및 정보")
+    st.markdown("<h4 style='margin:0 0 8px 0;font-size:16px;'>⚙️ 설정 및 정보</h4>", unsafe_allow_html=True)
 
     # 실전 모드 손익 초기화
     if not is_virtual:
