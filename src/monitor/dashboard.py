@@ -586,20 +586,8 @@ trading_type_color = "#2e7d32" if is_virtual else "#e53935"
 
 # 계좌/상태 정보 패널 HTML — 사이드바를 간결하게 유지하기 위해 여기서는 렌더링하지
 # 않고, '🎯 수익 도전 현황' 섹션에서 출력한다. (사이드바 스크롤 없이 메뉴 접근성 개선)
-# 증권사 브랜딩 헤더는 별도 변수로 분리하여 섹션의 '맨 아래'에 렌더링한다.
+# 증권사 브랜딩/Open API 링크는 사이드바 하단의 심플 웹링크로 대체되었다.
 # 폰트 스케일 통일: 제목 16px · 본문 14px · 보조 12px
-bank_header_html = """
-<div style='background-color:#ffffff;padding:15px;border-radius:10px;text-align:center;margin-bottom:15px;border:1px solid #e0e0e0;box-shadow:0 4px 6px rgba(0,0,0,0.05);'>
-<h3 style='color:#03256C;margin:0 0 3px 0;font-size:16px;font-weight:900;letter-spacing:1px;'>한국투자증권</h3>
-<p style='color:#666;font-size:12px;margin:0 0 10px 0;font-weight:600;'>KOREA INVESTMENT &amp; SECURITIES</p>
-<a href='https://apiportal.koreainvestment.com/' target='_blank' style='text-decoration:none;'>
-<div style='background-color:#03256C;color:white;padding:6px 10px;border-radius:6px;font-size:14px;font-weight:bold;'>
-🚀 KIS Developers (Open API)
-</div>
-</a>
-</div>
-"""
-
 account_panel_html = f"""
 <div style="margin-bottom:10px;">
 <h4 style="margin:0 0 8px 0;font-size:16px;">💎 Trading Bot Control</h4>
@@ -649,12 +637,17 @@ refresh_rate = st.sidebar.slider("새로고침 간격(초)", 5, 60, _cur_rate)
 if refresh_rate != _cur_rate:
     _set_query_param("refresh", str(refresh_rate))
 
-# 프로젝트 공식 홈페이지 링크
+# 프로젝트 공식 홈페이지 + 한국투자증권 Open API 링크 (심플 웹링크)
 st.sidebar.markdown(
     """
     <a href="https://leemgs.github.io/stock-quant-trader-kis/" target="_blank" style="text-decoration:none;">
         <div style='background-color:#f8f9fa;color:#333;padding:10px;border-radius:6px;text-align:center;border:1px solid #ddd;font-weight:bold;font-size:14px;margin-top:8px;'>
             🏠 프로젝트 공식 홈페이지
+        </div>
+    </a>
+    <a href="https://apiportal.koreainvestment.com/" target="_blank" style="text-decoration:none;">
+        <div style='background-color:#03256C;color:#ffffff;padding:10px;border-radius:6px;text-align:center;border:1px solid #03256C;font-weight:bold;font-size:14px;margin-top:8px;'>
+            🏦 한국투자증권 Open API
         </div>
     </a>
     """,
@@ -780,10 +773,6 @@ elif selected_menu == "🎯 수익 도전 현황":
     expander_title = f"⏰ {now.strftime('%Y-%m-%d %H:%M')} (한국:{'휴일' if is_kor_holiday else '평일'}, 미국:{'휴일' if is_us_holiday else '평일'}) ℹ️"
     with st.expander(expander_title):
         st.markdown(MARKET_HOURS_TABLE_HTML, unsafe_allow_html=True)
-
-    # 증권사 브랜딩 헤더 — 섹션 맨 아래에 렌더링
-    st.divider()
-    st.markdown(bank_header_html, unsafe_allow_html=True)
 
 elif selected_menu == "📈 Cumulative Equity Curve":
     st.subheader("📈 Cumulative Equity Curve")
