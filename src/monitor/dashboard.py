@@ -618,6 +618,18 @@ if _qp_view is not None:
 if "nav_view" not in st.session_state:
     st.session_state["nav_view"] = MENU_ITEMS[_default_idx]
 
+# 좌측 상단 Home 링크 — 대시보드 홈(루트 주소)으로 이동
+st.sidebar.markdown(
+    """
+    <a href="http://leemgs.mooo.com:8501/" target="_self" style="text-decoration:none;">
+        <div style='background-color:#03256C;color:#ffffff;padding:8px 10px;border-radius:6px;text-align:center;font-weight:bold;font-size:14px;margin-bottom:10px;'>
+            🏠 Home
+        </div>
+    </a>
+    """,
+    unsafe_allow_html=True
+)
+
 st.sidebar.markdown("#### 📂 메뉴")
 selected_menu = st.sidebar.radio(
     "메뉴 선택", MENU_ITEMS, key="nav_view", label_visibility="collapsed"
