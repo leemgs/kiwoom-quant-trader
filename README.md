@@ -4,7 +4,7 @@
 >
 > **한국투자증권 KIS API 기반 크로스플랫폼(Ubuntu/Windows/macOS) 자동매매 프레임워크**
 >
-> 🌐 **공식 가이드 웹사이트**: [docs/index.html](docs/index.html) (브라우저로 열기) 
+> 🌐 **공식 가이드 웹사이트**: [docs/index.html](docs/index.html) · 📊 **실시간 시장국면**: [docs/regime.html](docs/regime.html)
 
 ---
 
@@ -51,7 +51,47 @@ flowchart LR
 | `data/` | 🗂️ **런타임 데이터** | 거래 기록 SQLite DB, 잔고 캐시 (git 미추적) |
 | [`.env`](./.env.sample) | ⚙️ **설정** | 계좌·API 키·감시 종목·손절/익절 등 모든 운영 설정 |
 
-> **실행은 4가지 중 택 1**: ① `python3 main.py` 직접 실행 ② Docker Compose(권장) ③ systemd(Python) ④ systemd + Docker Compose — [5단계: 프로그램 실행](#5단계-프로그램-실행) 참고.
+---
+
+## 📚 문서 (Documentation)
+
+README를 간결하게 유지하기 위해 상세 내용은 [`documents/`](./documents) 폴더로 분리했습니다.
+
+| 문서 | 내용 |
+| :--- | :--- |
+| 🛠️ [설치 및 실행 가이드](./documents/installation-and-run.md) | 설치 · `.env` 세팅 · 실행 옵션(Python/Docker/systemd) · 대시보드 · 문제 해결 |
+| ☁️ [**무료 Open Cloud VM 운영 가이드**](./documents/free-oracle-cloud-vm.md) | **Oracle Cloud Always-Free 등 무료 VM에서 24시간 상시 운영하기** |
+| 💡 [환경 변수 상세 (.env)](./documents/environment-variables.md) | 모든 환경 변수의 역할 · 기본값 · 권장 세팅 표 |
+| 🏗️ [시스템 아키텍처 & 동작 원리](./documents/architecture.md) | 증권사 비교 · 아키텍처/동작 흐름 다이어그램 · 핵심 모듈 · 탑재 전략 |
+| 📖 [자동매매 운영 가이드](./documents/operation-guide.md) | 매매 시간 · 전략 변경 · 모니터링 · 실전 전환 주의 · 리포트 샘플 |
+| 🚀 [고수익 달성 로드맵](./documents/high-profit-roadmap.md) | 소액 고수익 도전 전략 · 추천 `.env` 세팅 (고위험) |
+| 📚 [참고문헌](./documents/references.md) | 공식 리소스 · 연구 논문 · 실무 사이트 |
+
+---
+
+## ⚡ 빠른 시작 (Quick Start)
+
+```bash
+# 1) 코드 내려받기 & 의존성 설치
+git clone https://github.com/leemgs/stock-quant-trader-kis.git
+cd stock-quant-trader-kis
+pip install -r requirements.txt
+
+# 2) 설정 파일 준비 (KIS 앱키/시크릿/계좌번호 입력)
+cp .env.sample .env
+nano .env
+
+# 3) 실행
+python3 main.py
+
+# 4) (선택) 실시간 대시보드
+streamlit run src/monitor/dashboard.py   # http://localhost:8501
+```
+
+- 처음이라면 **반드시 모의투자**(`KIS_VIRTUAL_TRADING=true`)로 검증하세요.
+- 상세 설치·실행 옵션은 👉 [설치 및 실행 가이드](./documents/installation-and-run.md)
+- 개인 PC 대신 **무료 클라우드에서 24시간 운영**하려면 👉 [무료 Open Cloud VM 가이드](./documents/free-oracle-cloud-vm.md)
+- KIS API 키 발급: [한국투자증권 KIS Developers](https://apiportal.koreainvestment.com/)
 
 ---
 
@@ -62,507 +102,24 @@ flowchart LR
 - **Cross-Platform**: Windows에 갇혀있던 자동매매를 리눅스/클라우드 환경으로 확장합니다.
 - **REST + WebSocket**: 현대적인 API 방식을 통해 안정적이고 빠른 데이터 수신과 주문 집행을 실현합니다.
 - **Quant**: 인간의 주관적 감정을 배제하고, 수학적 모델과 데이터에 기반한 **계량 투자(Quantitative Analysis)**의 정교함을 추구합니다.
-- **Trader**: 시장의 기회를 놓치지 않고 24시간 깨어있는 **자동 실행 엔진**으로서의 정체성을 나타냅니다.
 - **Pro**: 단순 자동매매를 넘어 백테스트, AI 감성 분석, 통계 리포팅 등 **전문가 수준의 프레임워크**임을 뜻합니다.
-- **🚀 (Rocket)**: 투자 수익의 폭발적인 성장과 기술적 혁신을 향한 끊임없는 도전을 상징합니다.
 
 본 프로젝트는 개인 투자자도 기관 수준의 전략과 분석 시스템을 소유할 수 있도록 돕기 위해 탄생했습니다.
 
 ---
 
-## 📊 증권사별 크로스플랫폼 호환성 비교
-
-두 운영체제(Windows/Ubuntu)를 모두 지원하려면 REST API 기반 증권사가 핵심입니다.
-
-| 증권사 | Windows | Ubuntu | API 방식 | 실시간 시세 | 모의투자 | 난이도 |
-| :--- | :---: | :---: | :--- | :---: | :---: | :---: |
-| **한국투자증권** | ✅ | ✅ | **REST + WebSocket** | ✅ | ✅ | **낮음** |
-| 미래에셋증권 | ✅ | ✅ | REST | ✅ | ✅ | 중간 |
-| 이베스트투자증권 | ✅ | ✅ | REST | ✅ | ✅ | 중간 |
-| 키움증권 | ✅ | ❌ | OCX (Windows 전용) | ✅ | ✅ | 낮음 |
-| 대신증권 CYBOS | ✅ | ❌ | COM (Windows 전용) | ✅ | ❌ | 높음 |
-
-### 🏆 한국투자증권(KIS API)을 추천하는 이유
-- **크로스플랫폼**: REST API라서 Windows·Ubuntu 동일한 코드 동작
-- **공식 파이썬 SDK**: `pip install kis-developers` 한 줄로 설치 및 관리 가능
-- **WebSocket 실시간 시세**: 자동매매의 핵심인 실시간 호가·체결 데이터 수신
-- **모의투자 서버**: 실제 자금 투입 전 완벽한 전략 검증 가능
-- **활발한 커뮤니티**: 국내 자동매매 개발자들 사이에서 가장 널리 사용됨
-
----
-
-## 1. 시스템 아키텍처 (System Architecture)
-
-본 시스템은 **이벤트 기반(Event-Driven)** 설계를 통해 데이터 수신과 주문 실행 사이의 지연 시간을 최소화합니다.
-
-```mermaid
-graph TD
-    A[KIS API Server] -->|REST API| B(Trading Logic)
-    A -->|WebSocket| C(Real-time Data)
-    B & C --> D{Strategy Manager}
-    D -->|종목 선정| E[Volatility Breakout]
-    D -->|기술적 분석| F[Moving Average]
-    E & F --> G[Risk Manager]
-    G -->|주문 전송| A
-    B -->|데이터 기록| H[(Trade History DB)]
-    H --> I[Analytics Engine]
-    I -->|성과 분석| J[PDF Report/Graphs]
-```
-
-## 🔄 동작 흐름 (Operation Flow)
-
-하루 매매 사이클의 실제 동작 순서입니다. 봇은 장중(09:00~15:20)에 아래 루프를 반복하며, **실제 체결이 확인된 거래만** DB에 기록합니다.
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant B as 🚀 매매 봇 (main.py)
-    participant K as 🏦 KIS API
-    participant S as 📈 전략 엔진
-    participant DB as 🗂️ SQLite DB
-    participant D as 📊 대시보드
-
-    B->>B: .env 설정 로드 (계좌·유니버스·전략 파라미터)
-    B->>K: 인증 토큰 발급 · 한국/미국 휴장일 확인
-    loop 장중 루프 (09:00 ~ 15:20)
-        B->>K: 예수금·잔고 동기화 (30초 캐시)
-        B->>K: 유니버스 종목 시세 조회 (5초 캐시)
-        S->>S: 사전 필터: 매수 가능액 · 최소 주가 · 거래량/유동성
-        Note over S: 예수금보다 비싼 종목은<br/>5분간 시세 조회 자체를 생략 (API 절약)
-        S->>S: 진입 판정: 시가 대비 +1.5~7% 돌파<br/>+ 연속 상승 모멘텀 (3틱)
-        alt 진입 신호 발생 (09:15 이후)
-            S->>K: 지정가 매수 주문 (스마트 Maker 라우팅)
-            K-->>S: 체결 응답 검증 (rt_cd == '0')
-            S->>DB: 체결 기록 저장 (Zero-Ghost)
-        end
-        S->>K: 보유 포지션 실시간 시세 감시
-        alt 익절/손절/트레일링 스탑 조건 충족
-            S->>K: 매도 주문 → 체결 검증
-            S->>DB: 실현손익 기록
-        end
-    end
-    B->>K: 15:20 이후 보유 종목 전량 청산 (기본 설정)
-    D->>K: 예수금·잔고 실시간 조회 (30초 주기)
-    DB->>D: 거래 내역·누적 손익·승률 시각화
-```
-
-> **핵심 원칙**
-> - **1일 1회/종목**: 같은 종목은 하루 한 번만 거래하여 과도한 수수료를 방지합니다.
-> - **Zero-Ghost**: KIS 주문 응답(`rt_cd == '0'`)이 검증된 실제 체결만 포지션·DB에 기록합니다.
-> - **실현손익 = 거래 기록 합계**: 계좌 입금·출금은 손익에 반영되지 않습니다.
-> - **API 호출 최소화**: 시세 5초·잔고 30초 캐시, 매수 불가 종목 5분 스킵, 휴장일 저전력 대기로 KIS rate limit을 보호합니다.
-
 ## 2. 실행 화면 (Screenshots)
 
-### 📈 실시간 매매 대시보드 (Web UI)
-![Dashboard Preview](img/dashboard_preview.jpg)
-
-### 💻 퀀트 엔진 자동매매 로그 (Terminal)
-![Terminal Logs](img/terminal_logs.jpg)
+| 📈 실시간 매매 대시보드 (Web UI) | 💻 퀀트 엔진 자동매매 로그 (Terminal) |
+| :---: | :---: |
+| ![Dashboard Preview](img/dashboard_preview.jpg) | ![Terminal Logs](img/terminal_logs.jpg) |
 
 ---
 
-### 핵심 모듈 기능
-- **Core Engine**: `kis-developers`를 이용한 한국투자증권 REST/WebSocket 통신 제어.
-- **Dual-Market Engine**: 단일 봇에서 국내 주식(KOSPI/KOSDAQ) 및 미국 주식(NYSE/NASDAQ) 유니버스를 동시에 지원하고 교차 매매 수행.
-- **Holiday-Aware Scheduler**: 한국(KR) 및 미국(US) 국가 공휴일을 실시간 확인하여, 휴장일에는 자동으로 거래를 멈추고 5분 단위 저전력 대기모드로 진입해 오작동 및 불필요한 API 호출을 원천 차단.
-- **Zero-Ghost Trades API 검증 엔진 🛡️**: KIS API의 실제 주문 처리 응답코드(`rt_cd == '0'`)를 완벽히 검증하여, 실제 체결/접수 완료된 거래만 포지션으로 등록하고 SQLite DB에 기록하도록 개편해 허위 기록 유발을 원천 차단.
-- **실시간 KIS 시세 감시 📊**: 보유 포지션 감시 및 익절/손절 시뮬레이션을 배제하고 KIS API 실시간 현재가 시세 조회(`self.broker.get_price(code)`)를 직접 연동하여 정밀하고 안정적인 리스크 관리(손절 -1.5%, 익절 +3.0%) 가동.
-- **스마트 지정가 Maker 라우팅 ⚡**: Mojito의 지정가 매수/매도 API 매칭 인자(`symbol, price, quantity` 순)를 완벽히 정렬하여, 시장가 슬리피지 방지 및 Maker 수수료 혜택이 실제 계좌 상에서 작동하도록 전면 개편.
-- **스마트 모멘텀 추세 전략 & 트레일링 스탑 (Extreme Growth) 📈**: 시가 대비 지정 상승률(breakout_threshold, 기본 1.5%) 돌파와 연속 상승 틱(momentum_ticks, 기본 3틱) 조건을 결합한 이중 필터 진입 시그널을 제공합니다. 진입 이후에는 최고점 대비 일정 비율(trailing_stop, 기본 1.5%) 하락 시 청산하는 트레일링 스탑 메커니즘을 적용하여 수익 보존율을 대폭 향상했습니다.
-- **KIS API Rate Limit 과부하 및 오류 방지 캐시 🛡️**: `data/balance_cache.json`을 공유 파일로 활용하여 30초 단위로 예수금 및 잔고를 캐싱 및 스로틀링합니다. 또한 잔고 부족으로 매수가 불가능한 종목에 5분간의 쿨다운 경고 필터를 적용하여 API 호출 오버헤드와 로그 스팸을 완전히 차단합니다.
-- **대시보드 성능 최적화 ⚡**: 대시보드의 기본 새로고침(Auto Refresh) 간격을 기존 10초에서 30초로 조정하여 불필요한 KIS API의 계좌 정보 조회 요청 횟수를 줄이고 브라우저 성능을 확보했습니다.
-- **Strategy Manager**: **앙상블(Ensemble) 엔진** 탑재. 돌파, 평균회귀, 추세추종 전략의 가중 투표 방식 채택.
-- **Risk Manager**: **글로벌 세이프 가드(Safe Guard)** 탑재. 나스닥 및 환율 추이에 따라 매매 비중 자동 조절.
-- **Paper Trading Engine**: 실시간 호가 잔량 및 슬리피지를 반영한 정밀 가상 매매 시뮬레이터.
-- **Ensemble Engine**: 전략별 실시간 성과를 추적하여 자산을 동적으로 배분.
-- **Genetic Optimizer**: 유전 알고리즘을 통해 최적의 매매 파라미터($K$값 등)를 스스로 학습 및 진화하여 `.env`에 직접 업데이트 및 저장.
-- **Compound Manager**: **복리 자금 관리 엔진**. 수익금을 자동으로 재투자하여 자산 성장을 가속화.
-- **Volatility Filter**: 거래대금이 폭발하는 **급등 주도주** 실시간 포착 엔진.
-- **AI News Analyzer**: **Google Gemini API**를 연동하여 실시간 뉴스의 호재/악재를 점수화.
-- **Analytics Engine**: 샤프 지수, MDD 및 **슬리피지 비용(Slippage Cost)** 분석 및 리포팅.
-
----
-
-## 2. 탑재 전략: 변동성 돌파 (Volatility Breakout)
-
-Larry Williams의 변동성 돌파 전략을 한국 시장에 최적화하여 구현하였습니다.
-
-- **진입 조건**: 
-    - `가격 > 전일 종가 + (전일 고가 - 전일 저가) * K` (K=0.5 추천)
-    - 당일 거래량 > 전일 평균 거래량 * 1.5
-- **청산 조건**: 당일 장마감 직전 전량 매도 (Overnight 최소화)
-- **자금 관리**: 계좌 자산의 10% 이내 분할 진입
-
----
-
-## 4. 시스템 요구 사양 (System Requirements)
-
-- **지원 운영체제**: Ubuntu 20.04+, Debian, macOS, Windows 10/11
-  - *Cloud VPS(AWS, GCP 등) Linux 환경 완벽 지원*
-- **파이썬 버전**: Python 3.8 이상 (64-bit 지원)
-- **네트워크**: 상시 인터넷 연결 필요
-
----
-
-## 5. 설치 및 실행 가이드 (User Manual)
-
-컴퓨터에 익숙하지 않은 초보자분들도 차근차근 따라 하면 설치할 수 있도록 구성하였습니다.
-
-### 1단계: 파이썬 및 필수 패키지 설치 (Ubuntu 기준)
-```bash
-sudo apt update
-sudo apt install python3 python3-pip git
-```
-
-### 2단계: 코드 다운로드 및 라이브러리 설치
-```bash
-git clone https://github.com/leemgs/stock-quant-trader.git
-cd stock-quant-trader
-pip install -r requirements.txt
-```
-
-### 3단계: 한국투자증권 API 신청
-1. [한국투자증권 KIS Developers](https://apiportal.koreainvestment.com/) 접속
-2. 앱 키(App Key) 및 앱 시크릿(App Secret) 발급
-3. 모의투자 계좌 개설 (권장)
-
-### 4단계: 설정 파일(.env) 세팅
-보안을 위해 API 키 및 계좌 정보 등 민감한 정보는 환경 변수 파일(`.env`)에서 관리합니다.
-
-1. `.env.sample` 파일을 복사하여 `.env` 파일을 생성합니다.
-```bash
-cp .env.sample .env
-```
-2. `.env` 파일을 열어 발급받은 키와 계좌 정보를 입력합니다.
-```env
-KIS_APP_KEY=발급받은_앱키
-KIS_APP_SECRET=발급받은_시크릿
-KIS_ACCOUNT_NO=계좌번호8자리
-```
-
-### 💡 환경 변수 설정 상세 (.env)
-본 시스템은 보안 및 유연성을 위해 모든 설정을 `.env` 파일의 환경 변수로 관리합니다. 각 변수의 역할과 권장 세팅은 아래와 같습니다.
-
-| 환경변수명 | 필수여부 | 기본값 | 설명 | 기타 |
-| :--- | :---: | :---: | :--- | :--- |
-| **`KIS_APP_KEY`** | **필수** | - | 한국투자증권 Open API App Key | 실전/모의투자에 맞는 키 입력 필요 |
-| **`KIS_APP_SECRET`** | **필수** | - | 한국투자증권 Open API App Secret | 실전/모의투자에 맞는 키 입력 필요 |
-| **`KIS_ACCOUNT_NO`** | **필수** | - | 종합계좌번호 (8자리 숫자) | 예: `73334504` |
-| **`KIS_ACCOUNT_SUFFIX`** | **필수** | `01` | 계좌 상품코드 (2자리 숫자) | 일반 주식위탁 계좌는 보통 `01` |
-| **`KIS_VIRTUAL_TRADING`** | **필수** | `true` | 모의투자 여부 (`true`: 모의 / `false`: 실전) | 실계좌 거래 시 반드시 `false` 설정 |
-| **`INVESTMENT_BUDGET`** | **필수** | `10000` | 최초 투자 자본금 (원) | 봇이 거래를 시작할 최초 원금 |
-| **`MAX_TRADING_LIMIT`** | **필수** | `100000` | 최대 매매 한도 금액 (원) | 원금 + 누적 수익 금액만큼 재투자하며 성장하되, 이 한도를 초과하지 못하도록 제한하는 안전장치 |
-| **`UNIVERSE`** | **필수** | `005930,000660,...` | 한국 주식 감시 대상 종목 코드 리스트 | 쉼표(`,`)로 구분하여 입력 |
-| **`US_UNIVERSE`** | 선택 | `AAPL.US,MSFT.US,...` | 미국 주식 감시 대상 종목 코드 리스트 | 쉼표(`,`)로 구분하며 뒤에 `.US` 접미사 필수 |
-| **`K_VALUE`** | 필수 | `0.4` | 변동성 돌파 전략의 $K$값 범위 (0 ~ 1) | 값이 낮을수록 돌파에 민감하게 반응 |
-| **`STOP_LOSS`** | 필수 | `0.015` | 손절 비율 (단위: 1 = 100%) | `0.015`는 -1.5% 발생 시 손절 청산 |
-| **`TAKE_PROFIT`** | 필수 | `0.03` | 익절 비율 (단위: 1 = 100%) | `0.03`은 +3.0% 발생 시 익절 청산 |
-| **`MAX_STOCKS`** | 필수 | `1` | 최대 동시 보유 주식 종목 수 | 리스크 관리를 위해 기본적으로 분산 제한 |
-| **`SLACK_BOT_TOKEN`** | 선택 | - | 실시간 매매 알림용 Slack Bot Token | `xoxb-`로 시작하는 토큰 |
-| **`SLACK_CHANNEL_ID`** | 선택 | - | 슬랙 알림을 전송할 채널 ID | 슬랙 채널 상세정보에서 확인 가능 |
-| **`GEMINI_API_KEY`** | 선택 | - | AI 매매 복기 및 시장 분석용 Google Gemini API Key | 미등록 시 대시보드 AI 분석 기능 비활성화 |
-| **`EXTREME_GROWTH_ENABLE`** | 필수 | `true` | 초강력 성장 모드(Extreme Growth) 활성화 여부 | `true` 설정 시 전용 스캘핑 엔진 가동 |
-| **`EXTREME_GROWTH_USE_MARGIN`** | 필수 | `true` | 미수/신용 레버리지 사용 여부 | 자본 대비 고수익(미수 베팅)을 노릴 때 사용 |
-| **`EXTREME_GROWTH_SMART_ORDER`** | 필수 | `true` | 스마트 지정가 주문(Maker) 라우팅 적용 여부 | 시장가 슬리피지 방지 및 Maker 수수료 혜택 적용 |
-| **`EXTREME_GROWTH_MICRO_SCALPING`** | 필수 | `3` | 마이크로 틱 스캘핑 호가창 조건 기준 (틱수) | 돌파 매수를 유발할 호가 깊이 기준 |
-| **`EXTREME_GROWTH_LIMIT_UP`** | 필수 | `true` | 상한가 잔량이 두터운 경우 당일 매도 예외(오버나잇) 여부 | `true` 시 상한가 종목은 명일 시초 청산 |
-| **`EXTREME_GROWTH_KELLY`** | 필수 | `true` | 켈리 공식을 통한 승률/손익비 기반 동적 비중 조절 여부 | 자금 관리 엔진 활성화 |
-| **`EXTREME_GROWTH_BREAKOUT_THRESHOLD`** | 필수 | `0.015` | 스마트 모멘텀 시가 대비 상승률 임계값 | 예: `0.015` (1.5% 상승 시 돌파 신호 확인 시작) |
-| **`EXTREME_GROWTH_MOMENTUM_TICKS`** | 필수 | `3` | 스마트 모멘텀 연속 상승 틱 수 조건 | 가격 이력이 연속으로 N번 올라야 매수 확정 |
-| **`EXTREME_GROWTH_TRAILING_STOP`** | 필수 | `0.015` | 트레일링 스탑 비율 | 예: `0.015` (보유 후 최고점 대비 1.5% 하락 시 매도 청산) |
-| **`MARKET_REGIME_FILTER_ENABLE`** | 선택 | `true` | 시장 하락장 감지 필터 사용 여부 | `true` 시 시장 대표 지수가 하락 추세일 때 신규 매수 중단 (보유 청산은 정상 동작) |
-| **`MARKET_REGIME_INDICES`** | 선택 | `^KS11,^KQ11` | 하락장 판단용 감시 지수 (yfinance 심볼) | 기본값은 코스피(`^KS11`)·코스닥(`^KQ11`). 쉼표로 구분 |
-| **`MARKET_REGIME_MA_WINDOW`** | 선택 | `20` | 추세 판정용 이동평균 기간(일) | 지수 현재가가 이 이평선 아래면 하락 추세로 간주 |
-| **`MARKET_REGIME_CRASH_THRESHOLD`** | 선택 | `0.015` | 당일 급락 판정 임계값 | `0.015` = 지수가 당일 -1.5% 이하로 급락하면 하락 판정 |
-| **`MARKET_REGIME_CACHE_TTL`** | 선택 | `300` | 하락장 판정 결과 캐시(초) | yfinance 호출 부하 및 rate limit 완화용 |
-| **`MARKET_REGIME_AGGREGATION`** | 선택 | `any` | 다중 지수 종합 방식 | `any`: 하나라도 하락 시 중단 / `all`: 모두 하락 시에만 중단 |
-
-*참고: 전략 설정, 대상 종목, 미국 주식 유니버스 및 투자 금액 등 모든 설정은 `.env` 파일에서 수정합니다.*
-
-### 5단계: 프로그램 실행
-
-#### 옵션 A: 일반 실행 (Python)
-1. 아래 명령어로 프로그램을 실행합니다.
-```bash
-python3 main.py
-```
-2. 시스템 로그와 슬랙(Slack) 알림을 통해 작동 상태를 확인합니다.
-
-#### 옵션 B: Docker Compose를 이용한 백그라운드 자동 실행 (권장)
-Docker가 설치된 환경이라면 복잡한 의존성 설치 없이 아래 명령어 한 줄로 매매 봇과 실시간 대시보드를 동시에 백그라운드에서 가동할 수 있습니다.
-```bash
-docker-compose up -d
-```
-- 매매 봇 로그 실시간 확인: `docker-compose logs -f bot`
-- 대시보드 접속: 브라우저에서 `http://localhost:8501` (외부 접속 시 `http://<서버_IP>:8501`)
-- 시스템 전체 안전 종료: `docker-compose down`
-
-> **참고**: 대시보드 컨테이너는 외부 IP 접속을 지원하기 위해 `--server.enableCORS=false --server.enableXsrfProtection=false` 옵션으로 실행됩니다. 자세한 내용은 아래 **문제 해결** 섹션을 참고하세요.
-
-#### 옵션 C: systemd를 이용한 부팅 시 자동 실행 (우분투)
-Docker 없이 우분투 PC가 **리부팅될 때마다** 매매 봇과 대시보드가 자동으로 실행되도록 systemd 서비스로 등록하는 방법입니다. 아래 예시는 프로젝트가 `/work/github-leemgs/stock-quant-trader-kis` 폴더에 설치되어 있고, 실행 계정이 `invain`이라고 가정합니다. (본인 환경에 맞게 경로와 `User`를 수정하세요.)
-
-**1. 매매 봇 서비스 파일 생성**
-
-`/etc/systemd/system/kis-trader.service` 파일을 아래 내용으로 생성합니다.
-```bash
-sudo tee /etc/systemd/system/kis-trader.service > /dev/null << 'EOF'
-[Unit]
-Description=KIS Quant Trading Bot
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=invain
-WorkingDirectory=/work/github-leemgs/stock-quant-trader-kis
-ExecStart=/usr/bin/python3 /work/github-leemgs/stock-quant-trader-kis/main.py
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-EOF
-```
-- `After=network-online.target`: 부팅 직후 네트워크가 연결된 뒤에 시작합니다. (KIS API 로그인 실패 방지)
-- `Restart=on-failure`: 봇이 비정상 종료되면 10초 후 자동 재시작합니다.
-- 가상환경(venv)을 사용한다면 `ExecStart`를 `/work/github-leemgs/stock-quant-trader-kis/venv/bin/python main.py` 형태로 변경하세요.
-
-**2. 대시보드 서비스 파일 생성 (선택)**
-
-웹 대시보드도 부팅 시 함께 띄우려면 `/etc/systemd/system/kis-dashboard.service`를 추가로 생성합니다.
-```bash
-sudo tee /etc/systemd/system/kis-dashboard.service > /dev/null << 'EOF'
-[Unit]
-Description=KIS Trading Dashboard (Streamlit)
-After=network-online.target kis-trader.service
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=invain
-WorkingDirectory=/work/github-leemgs/stock-quant-trader-kis
-ExecStart=/usr/bin/python3 -m streamlit run src/monitor/dashboard.py --server.address=0.0.0.0 --server.enableCORS=false --server.enableXsrfProtection=false
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-EOF
-```
-
-**3. 서비스 등록 및 시작**
-```bash
-sudo systemctl daemon-reload                        # 서비스 파일 변경 사항 반영
-sudo systemctl enable kis-trader kis-dashboard      # 부팅 시 자동 실행 등록
-sudo systemctl start kis-trader kis-dashboard       # 지금 즉시 시작
-```
-
-**4. 운영 명령어 모음**
-```bash
-systemctl status kis-trader          # 현재 상태 확인
-journalctl -u kis-trader -f          # 실시간 로그 확인 (Ctrl+C로 종료)
-sudo systemctl restart kis-trader    # 재시작 (.env 수정 후 반영 시)
-sudo systemctl stop kis-trader       # 중지
-sudo systemctl disable kis-trader    # 부팅 시 자동 실행 해제
-```
-
-> **주의사항**
-> - `.env` 파일은 `WorkingDirectory` 기준으로 로드되므로, 반드시 프로젝트 폴더에 `.env`가 준비된 상태에서 서비스를 시작하세요.
-> - 서비스 파일을 수정한 뒤에는 항상 `sudo systemctl daemon-reload`를 먼저 실행해야 변경이 반영됩니다.
-> - 실제 재부팅 후 자동 실행되는지 `sudo reboot` → `systemctl status kis-trader`로 최종 확인하는 것을 권장합니다.
-
-#### 옵션 D: systemd + Docker Compose를 이용한 부팅 시 자동 실행 (우분투)
-옵션 C처럼 Python을 직접 실행하는 대신, systemd가 `docker-compose up`을 호출하여 매매 봇과 대시보드 컨테이너를 통째로 관리하는 방법입니다. 의존성 설치가 필요 없고, 봇과 대시보드가 하나의 서비스 단위로 함께 기동/종료되는 것이 장점입니다. 아래 예시는 프로젝트가 `/work/github-leemgs/stock-quant-trader-kis` 폴더에 설치되어 있다고 가정합니다. (본인 환경에 맞게 경로를 수정하세요.)
-
-**1. 서비스 파일 생성**
-
-`/etc/systemd/system/kis-trader-docker.service` 파일을 아래 내용으로 생성합니다.
-```bash
-sudo tee /etc/systemd/system/kis-trader-docker.service > /dev/null << 'EOF'
-[Unit]
-Description=KIS Quant Trading Bot + Dashboard (Docker Compose)
-Requires=docker.service
-After=docker.service network-online.target
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-WorkingDirectory=/work/github-leemgs/stock-quant-trader-kis
-ExecStart=/usr/local/bin/docker-compose up -d
-ExecStop=/usr/local/bin/docker-compose down
-ExecReload=/usr/local/bin/docker-compose restart
-
-[Install]
-WantedBy=multi-user.target
-EOF
-```
-- `Requires=docker.service` / `After=docker.service`: Docker 데몬이 먼저 기동된 뒤에 컨테이너를 올립니다.
-- `Type=oneshot` + `RemainAfterExit=yes`: `docker-compose up -d`는 컨테이너를 띄우고 즉시 종료되는 명령이므로, 서비스가 "실행 완료 후에도 활성(active)" 상태로 유지되도록 하는 설정입니다. 실제 프로세스 관리는 Docker가 담당합니다.
-- Docker Compose **v2 플러그인**(`docker compose`, 하이픈 없음)을 사용하는 환경이라면 `ExecStart`/`ExecStop`/`ExecReload`를 각각 `/usr/bin/docker compose up -d` 형태로 변경하세요. 설치된 경로는 `which docker-compose` 또는 `docker compose version`으로 확인할 수 있습니다.
-
-**2. 서비스 등록 및 시작**
-```bash
-sudo systemctl daemon-reload                  # 서비스 파일 변경 사항 반영
-sudo systemctl enable kis-trader-docker      # 부팅 시 자동 실행 등록
-sudo systemctl start kis-trader-docker       # 지금 즉시 시작
-```
-
-**3. 운영 명령어 모음**
-```bash
-systemctl status kis-trader-docker           # 서비스 상태 확인
-docker-compose ps                            # 컨테이너 상태 확인 (프로젝트 폴더에서)
-docker-compose logs -f bot                   # 매매 봇 실시간 로그 확인
-sudo systemctl reload kis-trader-docker      # 컨테이너 재시작 (.env 수정 후 반영 시)
-sudo systemctl stop kis-trader-docker        # 전체 중지 (docker-compose down)
-sudo systemctl disable kis-trader-docker     # 부팅 시 자동 실행 해제
-```
-
-> **주의사항**
-> - **옵션 C와 동시에 사용하지 마세요.** `kis-trader`/`kis-dashboard` 서비스(직접 Python 실행)와 이 서비스를 함께 활성화하면 매매 봇이 이중으로 실행되어 중복 주문이 발생할 수 있습니다. 하나만 `enable` 하세요.
-> - `docker-compose.yml`의 `restart: unless-stopped` 정책 덕분에 Docker 데몬만 부팅 시 자동 시작되면(우분투 기본값) 컨테이너도 함께 살아납니다. 그럼에도 이 서비스를 등록해두면 `systemctl` 명령 하나로 봇 전체를 시작/중지/재시작할 수 있어 운영이 편리합니다.
-> - `.env` 수정 후에는 `sudo systemctl reload kis-trader-docker`(또는 프로젝트 폴더에서 `docker-compose restart`)로 컨테이너를 재시작해야 반영됩니다.
-
----
-
-## 6. 자동매매 운영 가이드 (Operation Guide)
-
-본 시스템을 효율적으로 운영하기 위한 실전 가이드입니다.
-
-### 1) 매매 시간 규정
-- **감시 시작**: 오전 08:50 (시스템 로그인 및 데이터 수집 준비)
-- **실제 매매**: 오전 09:00 ~ 오후 03:20
-- **당일 청산**: 오후 03:20 이후 보유 종목 전량 매도 (기본 설정 시)
-- *주의: 주말 및 공휴일에는 거래가 발생하지 않습니다.*
-
-### 2) 전략 선택 및 변경
-- 본 시스템은 기본적으로 **앙상블(Ensemble) 모드**로 작동합니다.
-- `main.py`에서 `strategies` 딕셔너리를 수정하여 특정 전략만 가동하거나 새로운 전략을 추가할 수 있습니다.
-- **AI 뉴스 분석**은 `.env`에 `GEMINI_API_KEY`가 등록된 경우에만 활성화됩니다.
-
-### 3) 모니터링 및 실전 손익 관리
-- **슬랙(Slack)**: 매수/매도 발생 시 스마트폰으로 즉시 알림이 전송됩니다.
-- **웹 대시보드**: `streamlit run src/monitor/dashboard.py`를 실행하여 실시간 수익률 곡선 및 실 계좌 현황을 확인하세요.
-- **실전 손익 초기화**: 실전 모드 가동 시, 모의/가상 거래의 이론 수익을 제외한 실제 계좌 자산 증감액(실제 총자산 - 원금)만 표시됩니다. 좌측 메뉴 하단의 **`실전 손익 초기화 🔄`** 버튼을 누르면 현재 자산을 기준으로 손익이 즉시 `0원`으로 초기화되며, 오프셋 정보는 `data/profit_baseline.txt` 파일에 지속 기록됩니다.
-- **로그 파일**: `logs/trading.log`에서 시스템의 모든 동작 상세 내역을 확인할 수 있습니다.
-
-### 4) 실전 투자 전환 시 주의사항
-1. 반드시 **모의투자** 환경에서 최소 1주일 이상 테스트하세요.
-2. `.env`의 `STOP_LOSS`와 `MAX_STOCKS` 설정을 본인의 투자 성향에 맞게 조정하세요.
-3. **투자 한도 설정**: `.env`의 `MAX_TRADING_LIMIT` 항목을 통해 수익이 나더라도 봇이 굴릴 수 있는 최대 매매 금액을 제한할 수 있습니다. (예: `INVESTMENT_BUDGET=10000`이고 누적 수익이 5만원인 경우 가용 자금은 6만원이지만, `MAX_TRADING_LIMIT=50000`이면 최대 5만원까지만 진입함)
-4. 인터넷 연결이 끊기면 API 접속이 종료되므로, 가급적 유선 LAN 환경이나 VPS 사용을 권장합니다.
-
----
-
-### 6단계: 실시간 모니터링 대시보드 실행
-매매 현황을 웹 브라우저에서 시각적으로 확인하려면 새 터미널을 열고 아래 명령어를 입력하세요.
-```bash
-streamlit run src/monitor/dashboard.py
-```
-*실행 후 브라우저에서 `localhost:8501` 주소로 접속하면 대시보드가 나타납니다.*
-
-#### 문제 해결: 대시보드가 "Please wait..." 에서 멈출 때
-외부 IP(예: `http://<서버_IP>:8501`)로 접속했을 때 화면이 **"Please wait..."** 에서 더 진행되지 않는다면, 이는 Streamlit이 화면을 그리기 위해 맺는 **WebSocket 연결**이 차단되었기 때문입니다. (HTML/JS는 받아왔지만 WebSocket이 붙지 않아 무한 대기 상태)
-
-1. **CORS/XSRF 보호가 원인인 경우 (대부분)**: `docker-compose.yml` 의 dashboard 커맨드에 아래 옵션이 적용되어 있는지 확인하세요. (기본 적용됨)
-   ```yaml
-   command: >
-     streamlit run src/monitor/dashboard.py
-     --server.address=0.0.0.0
-     --server.enableCORS=false
-     --server.enableXsrfProtection=false
-   ```
-   옵션 변경 후에는 컨테이너를 재생성해야 반영됩니다.
-   ```bash
-   docker-compose up -d --force-recreate dashboard
-   ```
-2. **네트워크/방화벽이 WebSocket을 차단하는 경우**: 위 옵션으로도 해결되지 않으면, 브라우저 개발자도구(F12) → Network 탭에서 `ws://<서버_IP>:8501/_stcore/stream` 연결 상태를 확인하세요. `failed`/`pending` 이라면 중간 프록시·방화벽이 WebSocket 업그레이드를 막는 것이므로, Nginx 등 리버스 프록시에서 `Upgrade`, `Connection` 헤더를 명시적으로 전달하도록 설정해야 합니다.
-
----
-
-
-## 6. 리포트 샘플 (Analytics)
-
-시스템 실행 후 `reports/` 폴더에 다음과 같은 분석 자료가 자동 생성됩니다.
-- **Performance Graph**: 누적 수익률 vs 벤치마크 (KOSPI/KOSDAQ)
-- **Drawdown Chart**: 하락폭 분석을 통한 리스크 관리 지표
-- **Advanced Statistical Report**: **p-value, T-test, Sharpe/Sortino Ratio**를 포함한 학술적 수준의 PDF 리포트
-- **Slippage Impact Report**: 이론적 수익과 실거래 수익의 오차 원인 분석
-
----
-
-## 7. 고수익 달성 로드맵 (Roadmap to 1,000% Profit)
-
-본 시스템은 지정한 소액 자본으로 지정한 투자 기간 동안 목표 수익 달성을 돕기 위한 특화 기능을 제공합니다.
-특히 지정한 투자 기간 동안 목표 수익을 달성하기 위해 **IonQ와 같은 양자 컴퓨터 관련주 등 비교적 우량하면서도 장중 변동성(fluctuation)이 심하고 빈번한 종목**을 타겟으로 자동매매 알고리즘이 특화 설계/구현되었습니다.
-
-### 💰 성장을 위한 3대 핵심 전략
-1. **고변동성 우량주 타겟팅 (High Fluctuation Targeting)**: 양자 컴퓨팅(ex. IonQ) 등 미래 유망 섹터 중 펀더멘털이 비교적 우량하면서도 장중 잦은 변동성을 보이는 종목을 집중 타겟팅하여 단기 차익을 극대화합니다.
-2. **복리의 극대화 (Compounding)**: `CompoundManager`를 활성화하여 수익이 발생할 때마다 매수 강도를 높이세요.
-3. **초단기 손절의 기계화 (Protection)**: 고변동성 종목을 다루는 만큼 -1.5% 손절선을 기계적으로 엄격히 준수하여 원금 파손을 방지하세요.
-
-### 운영 팁
-- **장초반 30분**: 모든 수익의 80%는 개장 직후에 발생합니다. `VolatilityFilter`가 잡은 종목에 집중하세요.
-- **분산보다 집중**: 자본금이 5만원 미만일 때는 가급적 1~2종목에 집중 투자하는 것이 유리합니다.
-
-### 시스템적 개선 포인트
-1. **회전율 극대화**: 하루 한 번 매매가 아닌, 하루에도 수십 번 시그널을 포착하는 `AdvancedBreakout` 스캘핑 모드를 활용하세요.
-2. **조건검색식 최적화**: 거래대금이 전일 대비 최소 500% 이상 폭증하는 종목(소위 '돈이 몰리는 종목')만 매수하도록 필터링을 강화했습니다.
-3. **손절의 기계화**: 1,000% 수익을 위해서는 큰 손실 한 번이 치명적입니다. 시스템에 구현된 **-1.5% 강제 손절** 기능을 절대 수정하지 마세요.
-4. **동적 K-값 활용**: 시장 상황에 따라 진입 장벽(K-Value)을 낮추거나 높여 기회비용을 최소화합니다.
-
-### 운영 노하우
-- **장초반 30분 집중**: 한국 시장의 변동성 80%는 오전 9시~9시 30분에 발생합니다. 이 시간에 시스템이 집중적으로 매매하도록 설정하세요.
-- **미수/신용 활용 (주의)**: 소액 자금으로 단기간 고수익을 내려면 한국투자증권의 증거금률을 활용하여 레버리지를 극대화해야 합니다. (단, 원금 초과 손실 위험이 있으니 반드시 모의투자 후 실행하세요.)
-- **서버 안정성**: 0.1초의 지연도 수익률에 영향을 줍니다. 가정용 PC보다는 **AWS 또는 가비아 등의 Windows VPS** 환경에서 24시간 가동하는 것을 권장합니다.
-
-### 🛠️ 고수익 도전용 추천 설정 (.env)
-소액으로 목표 수익률을 노릴 때 가장 효율적인 세팅값입니다.
-```env
-INVESTMENT_BUDGET=20000        # 최초 투자 원금 (예: 2만원)
-INVESTMENT_PERIOD_MONTH=1      # 투자 기간 (예: 1개월)
-INVESTMENT_INCOME_GOAL=100000  # 목표 수익 금액 (예: 10만원)
-MAX_TRADING_LIMIT=70000        # 최대 매매 한도 금액 (원금+수익금이 늘어나도 거래에 사용될 최대 규모 제한)
-STOP_LOSS=0.015                # -1.5%에서 칼같이 손절 (원금 최대한 보존)
-TAKE_PROFIT=0.03               # +3.0%에서 1차 익절 (빠른 자금 회전율 확보)
-K_VALUE=0.4                    # 진입 장벽을 낮춰 더 많은 단타 기회 포착
-MAX_STOCKS=1                   # 소액일수록 여러 종목 분산 대신 1종목에 풀베팅 집중
-```
-
----
-
-## 8. 참고문헌 (References)
-
-본 프로젝트의 아키텍처 및 전략 설계에 참고한 주요 자료입니다.
-
-### 공식 리소스
-- [한국투자증권 KIS Developers 공식 가이드라인](https://apiportal.koreainvestment.com/)
-- [한국투자증권 상시 모의투자 서비스 안내](https://securities.koreainvestment.com/main/mall/mock/MockIntro.jsp)
-
-### 관련 연구 논문
-- Williams, L. (1999). *Long-Term Secrets to Short-Term Trading*. Wiley. (변동성 돌파 전략의 기초)
-- Sharpe, W. F. (1994). *The Sharpe Ratio*. Journal of Portfolio Management. (성능 검증 지표)
-- Fischer, T., & Krauss, C. (2018). *Deep learning with long short-term memory networks for financial market predictions*. European Journal of Operational Research. (AI 전략 설계 참고)
-- Fama, E. F., & French, K. R. (1993). *Common risk factors in the returns on stocks and bonds*. Journal of Financial Economics. (팩터 투자 및 다요인 모델의 기초)
-- Kelly, J. L. (1956). *A New Interpretation of Information Rate*. Bell System Technical Journal. (켈리 공식 기반 최적 자금 관리 및 베팅 사이즈 설정)
-- Jegadeesh, N., & Titman, S. (1993). *Returns to Buying Winners and Selling Losers: Implications for Stock Market Efficiency*. The Journal of Finance. (추세 추종 및 모멘텀 전략)
-- Mandelbrot, B. (1963). *The Variation of Certain Speculative Prices*. The Journal of Business. (금융 자산의 팻테일(Fat-tail) 현상과 극단적 변동성 분석)
-- Dixon, M. F., Halperin, I., & Bilokon, P. (2020). *Machine Learning in Finance: From Theory to Practice*. Springer. (금융 데이터를 활용한 딥러닝/머신러닝 알고리즘 실무)
-- Lo, A. W., & MacKinlay, A. C. (1999). *A Non-Random Walk Down Wall Street*. Princeton University Press. (시장 미시구조 및 통계적 차익거래 기회 분석)
-
-### 실무적 참고 사이트
-- [QuantConnect](https://www.quantconnect.com/): 글로벌 퀀트 알고리즘 프레임워크 참고
-- [Systrader79의 퀀트 투자 블로그](https://blog.naver.com/systrader79): 한국 시장 자산 배분 전략 참고
-- [파이썬으로 배우는 알고리즘 트레이딩](https://wikidocs.net/book/110): KIS API 파이썬 연동 기초
-
----
-
-## 9. ⚠️ 면책 조항 및 투자 위험 고지 (Disclaimer)
+## ⚠️ 면책 조항 및 투자 위험 고지 (Disclaimer)
 
 > **본 프로젝트(Stock Quant Trader)는 "1개월 내 10배 수익" 등 어떠한 형태의 특정 수익률 달성도 절대 보장하지 않습니다.**
 
-본 소프트웨어에서 제공하는 매매 시그널, 종목 포착(IonQ 등 고변동성 종목 포함) 및 모든 알고리즘 로직은 참고용 정보일 뿐이며, 기술적 오류나 시장의 급격한 변동으로 인해 예기치 못한 **막대한 원금 손실**이 발생할 수 있습니다. 
+본 소프트웨어에서 제공하는 매매 시그널, 종목 포착(IonQ 등 고변동성 종목 포함) 및 모든 알고리즘 로직은 참고용 정보일 뿐이며, 기술적 오류나 시장의 급격한 변동으로 인해 예기치 못한 **막대한 원금 손실**이 발생할 수 있습니다.
 
 본 앱의 사용(실계좌 자동매매 연동 포함)으로 인해 발생하는 **모든 금전적 손실과 법적 책임은 전적으로 사용자 본인에게** 있습니다. 사용자는 이 시스템이 수익을 마법처럼 보장해 주지 않는다는 점을 명확히 인지하고, 반드시 충분한 기간 동안의 모의투자를 통해 리스크를 검증한 후 전적으로 본인의 판단과 책임하에 운용해야 합니다.
