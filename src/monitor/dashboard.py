@@ -825,12 +825,28 @@ elif selected_menu == "🔥 Profit/Loss Heatmap":
 elif selected_menu == "🤖 Gemini AI Investment Insights":
     st.subheader("🤖 Gemini AI Investment Insights")
     st.caption("Google Gemini로 최근 매매를 복기합니다. (`.env`의 GEMINI_API_KEY 필요)")
-    if st.button("AI 매매 복기 생성"):
+    st.caption("ℹ️ 이 화면에서는 생성 중 결과 유실을 막기 위해 자동 새로고침이 일시 중지됩니다.")
+
+    col_gen, col_clear = st.columns([1, 1])
+    with col_gen:
+        gen_clicked = st.button("AI 매매 복기 생성", use_container_width=True)
+    with col_clear:
+        if st.button("결과 지우기", use_container_width=True):
+            st.session_state.pop('ai_review', None)
+            st.rerun()
+
+    if gen_clicked:
         from analytics.ai_journal import AITradingJournal
         api_key = os.getenv("GEMINI_API_KEY", "")
-        with st.spinner("AI가 오늘의 매매를 분석 중입니다..."):
+        with st.spinner("AI가 오늘의 매매를 분석 중입니다... (모델에 따라 최대 1~2분 소요될 수 있습니다)"):
             journal = AITradingJournal(api_key)
             review = journal.generate_review(df, "Nasdaq: +1.2%, USD/KRW: -0.5%")
+        # 결과를 세션에 저장하여 재실행(rerun)에도 유지 (생성에 오래 걸려도 소실 방지)
+        st.session_state['ai_review'] = review
+
+    # 저장된 결과가 있으면 표시 (버튼을 다시 누르지 않아도 유지됨)
+    review = st.session_state.get('ai_review')
+    if review:
         # 실패 원인이 특정되도록 메시지 접두어(❌/⚠️)에 따라 심각도 표시
         if review.startswith("❌"):
             st.error(review)
@@ -882,9 +898,13 @@ elif selected_menu == "🖥️ System Activity Logs":
 # streamlit-autorefresh 없이도 meta refresh 방식으로 메모리 누수 없이 새로고침.
 gc.collect()
 
-st.markdown(
-    f"""
-    <meta http-equiv="refresh" content="{refresh_rate}">
-    """,
-    unsafe_allow_html=True
-)
+# ⚠️ Gemini AI 복기 화면에서는 자동 새로고침을 끈다.
+# 복기 생성이 새로고침 간격(기본 30초)보다 오래 걸리면, 직전 렌더에서 예약된
+# meta refresh가 페이지를 통째로 리로드하여 '분석 중' 작업과 결과가 사라지기 때문이다.
+if selected_menu != "🤖 Gemini AI Investment Insights":
+    st.markdown(
+        f"""
+        <meta http-equiv="refresh" content="{refresh_rate}">
+        """,
+        unsafe_allow_html=True
+    )
