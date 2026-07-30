@@ -627,15 +627,17 @@ _set_query_param("view", str(MENU_ITEMS.index(selected_menu)))
 st.sidebar.markdown("---")
 
 # 새로고침 간격 슬라이더 (사이드바에 상시 배치). 값은 쿼리 파라미터(refresh)로
-# 영속화하여 자동 새로고침(meta refresh)의 전체 리로드 후에도 유지되도록 한다.
+# 영속화하여 자동 새로고침의 전체 리로드 후에도 유지되도록 한다.
+# 범위: 5초 ~ 600초(10분)
 try:
     _cur_rate = int(_get_query_param("refresh", "30"))
 except (ValueError, TypeError):
     _cur_rate = 30
-_cur_rate = min(60, max(5, _cur_rate))
-refresh_rate = st.sidebar.slider("새로고침 간격(초)", 5, 60, _cur_rate)
+_cur_rate = min(600, max(5, _cur_rate))
+refresh_rate = st.sidebar.slider("새로고침 간격(초)", 5, 600, _cur_rate, step=5)
 if refresh_rate != _cur_rate:
     _set_query_param("refresh", str(refresh_rate))
+st.sidebar.caption(f"현재: {refresh_rate}초 ({refresh_rate/60:.1f}분) · 범위 5초~10분")
 
 # 프로젝트 공식 홈페이지 + 한국투자증권 Open API 링크 (심플 웹링크)
 st.sidebar.markdown(
@@ -894,17 +896,28 @@ elif selected_menu == "🖥️ System Activity Logs":
     st.markdown(log_box_html, unsafe_allow_html=True)
 
 # ── 메모리 정리 후 자동 새로고침 ─────────────────────────────────────────────
-# time.sleep() + st.rerun() 패턴은 매 실행마다 메모리를 쌓는 원인.
-# streamlit-autorefresh 없이도 meta refresh 방식으로 메모리 누수 없이 새로고침.
 gc.collect()
 
-# ⚠️ Gemini AI 복기 화면에서는 자동 새로고침을 끈다.
-# 복기 생성이 새로고침 간격(기본 30초)보다 오래 걸리면, 직전 렌더에서 예약된
-# meta refresh가 페이지를 통째로 리로드하여 '분석 중' 작업과 결과가 사라지기 때문이다.
+# ⚠️ 자동 새로고침은 iframe 내부 JS 타이머로 구현한다.
+#
+# 과거의 `<meta http-equiv="refresh">` 방식은 브라우저가 한 번 파싱하면 리로드를
+# '예약'해 버려서, 다른 화면(예: 로그)에서 타이머가 걸린 뒤 사이드바로 Gemini AI
+# 화면에 진입(soft rerun)하면 태그를 지워도 예약된 리로드가 취소되지 않아 복기 생성
+# 도중 페이지가 리로드되는 문제가 있었다.
+#
+# components.html로 만든 iframe의 setTimeout은, 해당 컴포넌트가 다음 실행에서
+# 렌더링되지 않으면(=Gemini 화면) iframe이 DOM에서 제거되며 타이머도 함께 취소된다.
+# 따라서 Gemini AI 화면에서는 생성이 아무리 오래 걸려도 리로드되지 않는다.
 if selected_menu != "🤖 Gemini AI Investment Insights":
-    st.markdown(
+    import streamlit.components.v1 as _components
+    _components.html(
         f"""
-        <meta http-equiv="refresh" content="{refresh_rate}">
+        <script>
+          // 부모(대시보드) 페이지를 refresh_rate초 후 새로고침
+          setTimeout(function() {{
+            window.parent.location.reload();
+          }}, {int(refresh_rate) * 1000});
+        </script>
         """,
-        unsafe_allow_html=True
+        height=0,
     )
