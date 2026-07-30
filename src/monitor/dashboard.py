@@ -835,15 +835,20 @@ elif selected_menu == "🔥 Profit/Loss Heatmap":
 
 elif selected_menu == "🤖 Gemini AI Investment Insights":
     st.subheader("🤖 Gemini AI Investment Insights")
-    if df.empty:
-        st.warning("아직 거래 내역이 없습니다. 매매 기록이 쌓이면 AI 복기를 생성할 수 있습니다.")
-    elif st.button("AI 매매 복기 생성"):
+    st.caption("Google Gemini로 최근 매매를 복기합니다. (`.env`의 GEMINI_API_KEY 필요)")
+    if st.button("AI 매매 복기 생성"):
         from analytics.ai_journal import AITradingJournal
         api_key = os.getenv("GEMINI_API_KEY", "")
-        journal = AITradingJournal(api_key)
         with st.spinner("AI가 오늘의 매매를 분석 중입니다..."):
+            journal = AITradingJournal(api_key)
             review = journal.generate_review(df, "Nasdaq: +1.2%, USD/KRW: -0.5%")
-            st.info(review)
+        # 실패 원인이 특정되도록 메시지 접두어(❌/⚠️)에 따라 심각도 표시
+        if review.startswith("❌"):
+            st.error(review)
+        elif review.startswith("⚠️"):
+            st.warning(review)
+        else:
+            st.success(review)
 
 elif selected_menu == "🖥️ System Activity Logs":
     col_log_title, col_log_btn = st.columns([4, 1])
