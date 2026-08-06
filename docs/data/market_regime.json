@@ -1,6 +1,6 @@
 {
-  "generated_at_utc": "2026-08-06T11:53:53Z",
-  "generated_at_kst": "2026-08-06 20:53:53 KST",
+  "generated_at_utc": "2026-08-06T13:25:37Z",
+  "generated_at_kst": "2026-08-06 22:25:37 KST",
   "ma_window": 200,
   "source": "Yahoo Finance (v8 chart API)",
   "indices": [
@@ -30,9 +30,9 @@
       "flag": "🇭🇰",
       "name": "홍콩 HSI",
       "symbol": "^HSI",
-      "price": 25530.28,
-      "ma": 25716.65,
-      "diff_pct": -0.72,
+      "price": 25497.49,
+      "ma": 25716.48,
+      "diff_pct": -0.85,
       "is_bull": false,
       "ok": true,
       "stale": false
