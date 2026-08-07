@@ -553,9 +553,12 @@ class ExtremeGrowthStrategy(BaseStrategy):
                     logging.warning(f"⚠️ [MarketRegime] 하락장 판정 중 오류: {e}. 신규 매수를 계속 진행합니다.")
                     is_bear, bear_reason = False, ""
                 if is_bear:
-                    if not self._bear_market_logged:
-                        logging.warning(f"🐻 [하락장 감지] 시장 전체가 하락 추세이므로 신규 매수를 중단합니다. ({bear_reason})")
+                    # 하락장 지속 중에도 5분마다 사유를 재로그하여 '왜 매수가 없는지' 추적 가능하게 함
+                    now_t = time.time()
+                    if not self._bear_market_logged or (now_t - getattr(self, '_bear_market_log_time', 0) > 300):
+                        logging.warning(f"🐻 [하락장 감지] 시장 하락 추세로 신규 매수를 중단합니다. (사유: {bear_reason})")
                         self._bear_market_logged = True
+                        self._bear_market_log_time = now_t
                     # 신규 매수 유니버스 루프를 건너뛰고 다음 주기로 (보유 포지션 감시는 계속 유지)
                     gc.collect()
                     time.sleep(2.0)
@@ -565,17 +568,27 @@ class ExtremeGrowthStrategy(BaseStrategy):
                     logging.info(f"🟢 [시장 회복] 하락장에서 벗어나 신규 매수를 재개합니다. ({bear_reason})")
                     self._bear_market_logged = False
 
+            # ── 진입 스킵 사유 집계 (왜 매수 시도가 0건인지 진단용) ───────────────
+            skip_counts = {}
+            order_attempts = 0
+            breakout_signals = 0
+            def _skip(reason):
+                skip_counts[reason] = skip_counts.get(reason, 0) + 1
+
             for code in self.universe:
                 # 이미 보유한 종목은 스킵
                 if code in self.positions:
+                    _skip("보유중")
                     continue
-                
+
                 # 당일 한번 거래 완료한 종목은 과도한 수수료 차감을 막기 위해 스킵 (1일 1회 매매 제한)
                 if code in self.traded_today:
+                    _skip("당일거래완료")
                     continue
-                    
+
                 # 설정된 시작 시간 이전 또는 15:15 이후에는 신규 매수 금지
                 if current_time < self.buy_start_time or is_after_market_close:
+                    _skip(f"매매시간외(<{self.buy_start_time} 또는 ≥15:15)")
                     continue
 
                 # 예수금 부족으로 '매수 불가' 판정된 종목은 쿨다운(5분) 동안 시세 조회
@@ -584,6 +597,7 @@ class ExtremeGrowthStrategy(BaseStrategy):
                 # 주원인이 되기 때문이다. 쿨다운이 끝나면 다시 시세를 조회해 재평가한다.
                 if hasattr(self, '_unaffordable_logged'):
                     if time.time() - self._unaffordable_logged.get(code, 0) < 300:
+                        _skip("예수금부족(쿨다운)")
                         continue
 
                 # API를 통해 실시간 시세 수신 (price_cache_ttl초 캐시 적용)
@@ -610,10 +624,12 @@ class ExtremeGrowthStrategy(BaseStrategy):
                             # 조회 실패: 직전 캐시가 있으면 그대로 쓰되 모멘텀 기록은 하지 않음
                             if code not in self.price_cache:
                                 logging.warning(f"⚠️ [{code}] KIS API 시세 조회 실패. 다음 주기로 미룹니다.")
+                                _skip("시세조회실패")
                                 continue
                     current_price = self.price_cache[code]['price']
                 except Exception as e:
                     logging.warning(f"⚠️ [{code}] KIS API 시세 조회 에러: {e}. 해당 종목 매매를 건너뜁니다.")
+                    _skip("시세조회에러")
                     continue
                 
                 # 실제 계좌 예수금 기반으로 1주도 살 수 없으면 스킵 (5분 쿨다운 캐시 적용)
@@ -629,16 +645,19 @@ class ExtremeGrowthStrategy(BaseStrategy):
                             f"매수 불가. (5분간 재확인 생략)"
                         )
                         self._unaffordable_logged[code] = time.time()
+                    _skip("예수금부족(현재가>예수금)")
                     continue
-                    
+
                 # ── 신규 필터: 최소 주가 제한 (스프레드 완화) ────────────────────
                 if current_price < self.min_stock_price:
+                    _skip(f"최소주가미만(<{self.min_stock_price:,}원)")
                     continue
 
                 # ── 신규 필터: 거래량 및 유동성 검증 ────────────────────────────
                 volume = self.price_cache[code].get('volume', 0.0)
                 prev_volume = self.price_cache[code].get('prev_volume', 0.0)
                 if prev_volume < self.min_prev_volume or volume < prev_volume * self.min_volume_ratio:
+                    _skip("거래량/유동성미달")
                     continue
                     
                 limit_up_price = int(current_price * 1.3)
@@ -674,12 +693,21 @@ class ExtremeGrowthStrategy(BaseStrategy):
                 is_breakout = is_above_threshold and is_rising_trend and is_near_high
 
                 if is_breakout:
+                    breakout_signals += 1
                     logging.info(
                         f"🚀 [{code}] 스마트 진입 신호 확정! "
                         f"시가 대비 +{price_change_from_open*100:.2f}% (진입범위: {self.breakout_threshold*100:.1f}% ~ {self.max_breakout_threshold*100:.1f}%), "
                         f"당일 고점({daily_high:,}원) 대비 버퍼 통과, "
                         f"{self.momentum_ticks}틱 연속 상승 및 모멘텀 필터 통과"
                     )
+                else:
+                    # 어떤 조건이 미충족인지 세분화하여 진단
+                    if not is_above_threshold:
+                        _skip("돌파율미충족(시가대비)")
+                    elif not is_rising_trend:
+                        _skip("연속상승모멘텀미충족")
+                    else:
+                        _skip("당일고점대비하락")
 
                 # 뉴스는 실제 DART API 미연동 상태이므로 비활성화
                 news_target = None
@@ -729,9 +757,10 @@ class ExtremeGrowthStrategy(BaseStrategy):
                         target_qty = max_possible_qty
                     
                     if target_qty > 0:
+                        order_attempts += 1
                         expected_required_capital = target_qty * current_price
                         logging.info(f"💰 [자금관리] 켈리 베팅 기반 진입 시도: 목표 예산 {budget:,.0f}원 (주문: {target_qty}주, 예상 필요 자금: {expected_required_capital:,.0f}원, 가용 예수금: {real_cash:,.0f}원)")
-                        
+
                         # 스마트 주문 라우팅
                         res = self.smart_order_routing(code, target_qty, "BUY", current_price, orderbook=None)
                         
@@ -758,6 +787,7 @@ class ExtremeGrowthStrategy(BaseStrategy):
                             msg = res.get('msg1', '알 수 없는 오류') if isinstance(res, dict) else '응답 없음'
                             logging.error(f"❌ [{code}] 매수 주문 실패 (API 오류): {msg}")
                     else:
+                        _skip("돌파신호O_예산부족")
                         # 예산 부족 로그 (최초 1회만 출력되도록 처리)
                         if not hasattr(self, 'insufficient_budget_logged'):
                             self.insufficient_budget_logged = set()
@@ -771,6 +801,17 @@ class ExtremeGrowthStrategy(BaseStrategy):
 
                 # (루프 간 지연 방지용)
                 time.sleep(0.1)
+
+            # ── 이번 주기에 매수 시도가 0건이면 '왜 진입하지 않았는지' 사유 요약 로그 ──
+            # (매 2초 루프마다 찍으면 스팸이므로, 요약 내용이 바뀌거나 5분마다 1회만 출력)
+            if order_attempts == 0 and self.universe:
+                summary = ", ".join(f"{k} {v}건" for k, v in sorted(skip_counts.items(), key=lambda x: -x[1]))
+                summary = f"[진입 스킵 요약] 유니버스 {len(self.universe)}종목 중 매수 시도 0건 (돌파신호 {breakout_signals}건) → {summary or '사유 없음'}"
+                now_t = time.time()
+                if summary != getattr(self, '_last_skip_summary', None) or (now_t - getattr(self, '_last_skip_summary_time', 0) > 300):
+                    logging.info("🔎 " + summary)
+                    self._last_skip_summary = summary
+                    self._last_skip_summary_time = now_t
 
             # 유니버스 전체 순회 후 서버 부하 방지 및 가비지 컬렉션
             gc.collect()
