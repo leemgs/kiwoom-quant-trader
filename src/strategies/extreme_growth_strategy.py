@@ -807,6 +807,11 @@ class ExtremeGrowthStrategy(BaseStrategy):
             if order_attempts == 0 and self.universe:
                 summary = ", ".join(f"{k} {v}건" for k, v in sorted(skip_counts.items(), key=lambda x: -x[1]))
                 summary = f"[진입 스킵 요약] 유니버스 {len(self.universe)}종목 중 매수 시도 0건 (돌파신호 {breakout_signals}건) → {summary or '사유 없음'}"
+                # 유니버스 전 종목이 예수금 초과로 스킵되면(=1주도 못 삼) 실행 가능한 안내를 덧붙인다.
+                unaffordable = skip_counts.get("예수금부족(현재가>예수금)", 0)
+                if unaffordable >= len([c for c in self.universe if c not in self.positions and c not in self.traded_today]) and unaffordable > 0:
+                    summary += (" | ⚠️ 모든 감시 종목이 예수금보다 비싸 1주도 매수할 수 없습니다. "
+                                "'.env'의 UNIVERSE에 더 저렴한 종목을 추가하거나 예수금(INVESTMENT_BUDGET)을 늘리세요.")
                 now_t = time.time()
                 if summary != getattr(self, '_last_skip_summary', None) or (now_t - getattr(self, '_last_skip_summary_time', 0) > 300):
                     logging.info("🔎 " + summary)

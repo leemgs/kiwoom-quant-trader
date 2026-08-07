@@ -1,7 +1,12 @@
 import time
 import logging
 
-import yfinance as yf
+import requests
+
+try:
+    import yfinance as yf  # 폴백용 (직접 조회 실패 시)
+except Exception:  # noqa: BLE001
+    yf = None
 
 
 class MarketRegimeFilter:
@@ -55,25 +60,55 @@ class MarketRegimeFilter:
     def _index_name(self, symbol):
         return self._INDEX_NAMES.get(symbol, symbol)
 
+    def _fetch_closes(self, symbol):
+        """일봉 종가 리스트를 반환. 야후 차트 API(requests) 우선, 실패 시 yfinance 폴백.
+
+        서버에 고정된 구버전 yfinance(0.2.31)가 야후 API 변경으로 조회에 계속 실패해
+        하락장 필터가 무력화되던 문제를 피하기 위해, 대시보드와 동일한 경량 차트
+        엔드포인트를 직접 호출한다.
+        """
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        for host in ("query1.finance.yahoo.com", "query2.finance.yahoo.com"):
+            url = f"https://{host}/v8/finance/chart/{symbol}?range=1y&interval=1d"
+            try:
+                resp = requests.get(url, headers=headers, timeout=10)
+                resp.raise_for_status()
+                data = resp.json()
+                result = (data.get("chart", {}).get("result") or [None])[0]
+                if not result:
+                    continue
+                quote = (result.get("indicators", {}).get("quote") or [{}])[0]
+                closes = [c for c in (quote.get("close") or []) if c is not None]
+                if len(closes) >= 2:
+                    return [float(c) for c in closes]
+            except Exception:  # noqa: BLE001
+                continue
+        # 폴백: yfinance
+        if yf is not None:
+            try:
+                lookback_days = max(self.ma_window * 2, 40)
+                hist = yf.Ticker(symbol).history(period=f"{lookback_days}d")
+                closes = hist["Close"].dropna() if hist is not None and "Close" in hist else None
+                if closes is not None and len(closes) >= 2:
+                    return [float(c) for c in closes.tolist()]
+            except Exception:  # noqa: BLE001
+                pass
+        return None
+
     def _evaluate_index(self, symbol):
         """단일 지수의 하락 여부를 판정. (is_bear, reason) 반환. 데이터 부재 시 (None, 사유)."""
-        # 이동평균 계산에 필요한 넉넉한 기간의 일봉 데이터 확보
-        lookback_days = max(self.ma_window * 2, 40)
-        ticker = yf.Ticker(symbol)
-        hist = ticker.history(period=f"{lookback_days}d")
-
-        closes = hist["Close"].dropna() if hist is not None and "Close" in hist else None
-        if closes is None or len(closes) < 2:
+        closes = self._fetch_closes(symbol)
+        if not closes or len(closes) < 2:
             return None, f"{self._index_name(symbol)} 데이터 부족"
 
-        current = float(closes.iloc[-1])
-        prev_close = float(closes.iloc[-2])
+        current = float(closes[-1])
+        prev_close = float(closes[-2])
         change_pct = (current - prev_close) / prev_close if prev_close else 0.0
 
         # 이동평균은 확보된 데이터가 부족하면 가능한 범위(최소 5)로 축소하여 계산
         window = min(self.ma_window, len(closes))
         window = max(window, 5) if len(closes) >= 5 else len(closes)
-        ma = float(closes.tail(window).mean())
+        ma = float(sum(closes[-window:]) / window)
 
         below_ma = current < ma
         acute_crash = change_pct <= -self.crash_threshold
