@@ -1,6 +1,6 @@
 {
-  "generated_at_utc": "2026-08-12T18:42:27Z",
-  "generated_at_kst": "2026-08-13 03:42:27 KST",
+  "generated_at_utc": "2026-08-12T20:28:03Z",
+  "generated_at_kst": "2026-08-13 05:28:03 KST",
   "ma_window": 200,
   "source": "Yahoo Finance (v8 chart API)",
   "indices": [
@@ -8,9 +8,9 @@
       "flag": "🇺🇸",
       "name": "미국 S&P500",
       "symbol": "^GSPC",
-      "price": 7758.71,
-      "ma": 7065.36,
-      "diff_pct": 9.81,
+      "price": 7748.5,
+      "ma": 7065.31,
+      "diff_pct": 9.67,
       "is_bull": true,
       "ok": true,
       "stale": false
@@ -42,8 +42,8 @@
       "name": "일본 Nikkei225",
       "symbol": "^N225",
       "price": 66970.22,
-      "ma": 57234.01,
-      "diff_pct": 17.01,
+      "ma": 57499.97,
+      "diff_pct": 16.47,
       "is_bull": true,
       "ok": true,
       "stale": false
