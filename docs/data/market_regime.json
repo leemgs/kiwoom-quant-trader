@@ -1,6 +1,6 @@
 {
-  "generated_at_utc": "2026-08-16T02:49:20Z",
-  "generated_at_kst": "2026-08-16 11:49:20 KST",
+  "generated_at_utc": "2026-08-16T04:22:32Z",
+  "generated_at_kst": "2026-08-16 13:22:32 KST",
   "ma_window": 200,
   "source": "Yahoo Finance (v8 chart API)",
   "indices": [
@@ -20,8 +20,8 @@
       "name": "한국 KOSPI",
       "symbol": "^KS11",
       "price": 6977.94,
-      "ma": 5830.14,
-      "diff_pct": 19.69,
+      "ma": 5873.23,
+      "diff_pct": 18.81,
       "is_bull": true,
       "ok": true,
       "stale": false
