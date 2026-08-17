@@ -654,9 +654,13 @@ class ExtremeGrowthStrategy(BaseStrategy):
                     continue
 
                 # ── 신규 필터: 거래량 및 유동성 검증 ────────────────────────────
+                # ⚠️ 버그 수정(2026-08-17): KIS inquire-price(FHKST01010100) 응답에는
+                # prdy_vol(전일거래량) 필드가 존재하지 않아 prev_volume이 항상 0으로 들어온다.
+                # 그 결과 기존 조건(prev_volume < min_prev_volume)이 예수금으로 살 수 있는 전
+                # 종목을 무조건 컷하여 07-29 이후 매수 0건이 되었다. 엔드포인트가 확실히 주는
+                # 당일 누적거래량(acml_vol='volume')을 유동성 기준으로 사용하도록 교체한다.
                 volume = self.price_cache[code].get('volume', 0.0)
-                prev_volume = self.price_cache[code].get('prev_volume', 0.0)
-                if prev_volume < self.min_prev_volume or volume < prev_volume * self.min_volume_ratio:
+                if volume < self.min_prev_volume:
                     _skip("거래량/유동성미달")
                     continue
                     
