@@ -1,6 +1,6 @@
 {
-  "generated_at_utc": "2026-08-20T04:23:17Z",
-  "generated_at_kst": "2026-08-20 13:23:17 KST",
+  "generated_at_utc": "2026-08-20T06:21:00Z",
+  "generated_at_kst": "2026-08-20 15:21:00 KST",
   "ma_window": 200,
   "source": "Yahoo Finance (v8 chart API)",
   "indices": [
@@ -19,9 +19,9 @@
       "flag": "🇰🇷",
       "name": "한국 KOSPI",
       "symbol": "^KS11",
-      "price": 6869.14,
-      "ma": 5873.58,
-      "diff_pct": 16.95,
+      "price": 6802.01,
+      "ma": 5873.24,
+      "diff_pct": 15.81,
       "is_bull": true,
       "ok": true,
       "stale": false
@@ -30,9 +30,9 @@
       "flag": "🇭🇰",
       "name": "홍콩 HSI",
       "symbol": "^HSI",
-      "price": 25786.32,
-      "ma": 25702.87,
-      "diff_pct": 0.32,
+      "price": 25779.84,
+      "ma": 25712.84,
+      "diff_pct": 0.26,
       "is_bull": true,
       "ok": true,
       "stale": false
@@ -41,9 +41,9 @@
       "flag": "🇯🇵",
       "name": "일본 Nikkei225",
       "symbol": "^N225",
-      "price": 66046.12,
-      "ma": 57915.83,
-      "diff_pct": 14.04,
+      "price": 66136.32,
+      "ma": 57916.28,
+      "diff_pct": 14.19,
       "is_bull": true,
       "ok": true,
       "stale": false
