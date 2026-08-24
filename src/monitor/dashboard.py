@@ -683,7 +683,9 @@ else:
 
 if not df.empty:
     total_trades = len(df)
-    win_rate = (df['profit'] > 0).mean() * 100
+    decided_profits = pd.to_numeric(df['profit'], errors='coerce').dropna()
+    decided_profits = decided_profits[decided_profits != 0]
+    win_rate = (decided_profits > 0).mean() * 100 if not decided_profits.empty else 0.0
     buy_count = len(df[df['type'].str.upper() == 'BUY']) if 'type' in df.columns else 0
     sell_count = len(df[df['type'].str.upper() == 'SELL']) if 'type' in df.columns else 0
 else:
@@ -817,6 +819,67 @@ elif selected_menu == "📋 Recent Trade History":
                 use_container_width=True
             )
         st.dataframe(df.sort_values('timestamp', ascending=False).head(20), use_container_width=True)
+
+        # 출력 테이블과 동일한 거래 데이터를 기반으로 자동매매 성과를 요약한다.
+        # 보합 거래는 별도로 표시하며 승률은 방향이 결정된 거래(수익/손실)만으로 계산한다.
+        from analytics.trade_win_rate import build_win_rate_data
+
+        outcome_df, win_rate_timeline = build_win_rate_data(df)
+        wins = int(outcome_df.loc[outcome_df['결과'] == '수익', '거래 수'].iloc[0])
+        losses = int(outcome_df.loc[outcome_df['결과'] == '손실', '거래 수'].iloc[0])
+        breakeven = int(outcome_df.loc[outcome_df['결과'] == '보합', '거래 수'].iloc[0])
+        decided_trades = wins + losses
+        auto_win_rate = wins / decided_trades * 100 if decided_trades else 0.0
+
+        st.divider()
+        st.subheader("🎯 자동매매 승률 현황")
+        st.caption("Recent Trade History 전체 조회 데이터 기준 · 승률 = 수익 거래 ÷ (수익 + 손실 거래)")
+        metric_win_rate, metric_wins, metric_losses, metric_breakeven = st.columns(4)
+        metric_win_rate.metric("자동매매 승률", f"{auto_win_rate:.1f}%")
+        metric_wins.metric("수익 거래", f"{wins}건")
+        metric_losses.metric("손실 거래", f"{losses}건")
+        metric_breakeven.metric("보합 거래", f"{breakeven}건")
+
+        chart_outcomes, chart_trend = st.columns([1, 2])
+        with chart_outcomes:
+            fig_outcomes = px.pie(
+                outcome_df,
+                names='결과',
+                values='거래 수',
+                hole=0.58,
+                color='결과',
+                color_discrete_map={'수익': '#2e7d32', '손실': '#e53935', '보합': '#9e9e9e'},
+                title='거래 결과 구성',
+            )
+            fig_outcomes.update_traces(textinfo='label+value', hovertemplate='%{label}: %{value}건 (%{percent})<extra></extra>')
+            fig_outcomes.update_layout(margin=dict(l=10, r=10, t=50, b=10), legend_title_text='결과')
+            st.plotly_chart(fig_outcomes, use_container_width=True)
+
+        with chart_trend:
+            if not win_rate_timeline.empty:
+                fig_win_rate = px.line(
+                    win_rate_timeline,
+                    x='거래 번호',
+                    y='누적 승률',
+                    markers=True,
+                    title='거래 진행에 따른 누적 승률',
+                    hover_data={'timestamp': True, '거래 번호': True, '누적 승률': ':.1f'},
+                )
+                fig_win_rate.add_hline(
+                    y=50,
+                    line_dash='dash',
+                    line_color='#9e9e9e',
+                    annotation_text='50% 기준선',
+                )
+                fig_win_rate.update_yaxes(range=[0, 100], ticksuffix='%')
+                fig_win_rate.update_layout(margin=dict(l=10, r=10, t=50, b=10))
+                st.plotly_chart(fig_win_rate, use_container_width=True)
+            else:
+                st.info("수익 또는 손실이 확정된 거래가 생기면 누적 승률 추이가 표시됩니다.")
+
+        del fig_outcomes
+        if 'fig_win_rate' in locals():
+            del fig_win_rate
     else:
         st.warning("아직 거래 내역이 없습니다. 시스템이 거래를 시작하면 상세 내역이 활성화됩니다.")
 
