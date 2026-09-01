@@ -1,6 +1,6 @@
 {
-  "generated_at_utc": "2026-09-01T08:56:15Z",
-  "generated_at_kst": "2026-09-01 17:56:15 KST",
+  "generated_at_utc": "2026-09-01T14:20:26Z",
+  "generated_at_kst": "2026-09-01 23:20:26 KST",
   "ma_window": 200,
   "source": "Yahoo Finance (v8 chart API)",
   "indices": [
@@ -8,9 +8,9 @@
       "flag": "🇺🇸",
       "name": "미국 S&P500",
       "symbol": "^GSPC",
-      "price": 7686.14,
-      "ma": 7118.59,
-      "diff_pct": 7.97,
+      "price": 7650.67,
+      "ma": 7122.61,
+      "diff_pct": 7.41,
       "is_bull": true,
       "ok": true,
       "stale": false
@@ -20,8 +20,8 @@
       "name": "한국 KOSPI",
       "symbol": "^KS11",
       "price": 6835.8,
-      "ma": 6010.53,
-      "diff_pct": 13.73,
+      "ma": 6024.34,
+      "diff_pct": 13.47,
       "is_bull": true,
       "ok": true,
       "stale": false
