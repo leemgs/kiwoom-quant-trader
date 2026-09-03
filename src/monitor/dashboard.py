@@ -17,15 +17,79 @@ load_dotenv(override=True)
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 # ── 페이지 설정 ────────────────────────────────────────────────────────────────
-st.set_page_config(page_title="Real-time Dashboard for Stock Quant Trader", layout="wide")
+st.set_page_config(
+    page_title="QuantFlow · AI Stock Command Center",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
-# 사이드바 상단 여백 최소화 스타일
+# 앱 전체 디자인 시스템. Streamlit의 동작은 유지하면서 카드, 내비게이션, 차트
+# 컨테이너를 하나의 현대적인 인포그래픽 언어로 통일한다.
 st.markdown(
     """
     <style>
-        [data-testid="stSidebarUserContent"] {
-            padding-top: 1.5rem !important;
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap');
+        :root {
+            --navy: #081426; --panel: #ffffff; --canvas: #f3f7fb;
+            --blue: #2563eb; --cyan: #06b6d4; --mint: #10b981;
+            --ink: #10213a; --muted: #64748b; --line: #e2e8f0;
         }
+        html, body, [class*="css"] { font-family: 'Inter', 'Noto Sans KR', sans-serif; }
+        .stApp { background: radial-gradient(circle at 82% 0%, #e0f2fe 0, transparent 27%), var(--canvas); color: var(--ink); }
+        .block-container { max-width: 1480px; padding-top: 1.6rem; padding-bottom: 3rem; }
+        header[data-testid="stHeader"] { background: transparent; }
+        [data-testid="stSidebarUserContent"] {
+            padding-top: 1.25rem !important;
+            padding-left: 1rem; padding-right: 1rem;
+        }
+        section[data-testid="stSidebar"] { background: var(--navy); border-right: 1px solid rgba(255,255,255,.08); }
+        section[data-testid="stSidebar"] * { color: #dbeafe; }
+        section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] hr { border-color: rgba(255,255,255,.1); }
+        section[data-testid="stSidebar"] div[role="radiogroup"] { gap: .35rem; }
+        section[data-testid="stSidebar"] label[data-baseweb="radio"] {
+            padding: .7rem .75rem; border-radius: 12px; transition: .18s ease;
+            border: 1px solid transparent;
+        }
+        section[data-testid="stSidebar"] label[data-baseweb="radio"]:hover {
+            background: rgba(59,130,246,.13); border-color: rgba(96,165,250,.22); transform: translateX(2px);
+        }
+        section[data-testid="stSidebar"] label[data-baseweb="radio"]:has(input:checked) {
+            background: linear-gradient(135deg, rgba(37,99,235,.9), rgba(6,182,212,.72));
+            box-shadow: 0 8px 22px rgba(2,132,199,.22);
+        }
+        section[data-testid="stSidebar"] [data-testid="stSlider"] { padding: .25rem .2rem; }
+        .brand-block { padding: .4rem .35rem 1rem; }
+        .brand-mark { display:flex; align-items:center; gap:.7rem; font-size:1.2rem; font-weight:800; color:#fff; }
+        .brand-icon { width:38px;height:38px;display:grid;place-items:center;border-radius:12px;background:linear-gradient(135deg,#3b82f6,#06b6d4);box-shadow:0 8px 22px rgba(6,182,212,.28); }
+        .brand-caption { color:#7dd3fc !important; font-size:.69rem; font-weight:600; letter-spacing:.13em; margin:.45rem 0 0 3.1rem; }
+        .hero-panel { position:relative; overflow:hidden; padding:1.55rem 1.7rem; border-radius:22px; color:#fff; background:linear-gradient(120deg,#081426 0%,#102d55 58%,#075985 100%); box-shadow:0 18px 45px rgba(15,23,42,.15); margin-bottom:1rem; }
+        .hero-panel:after { content:"";position:absolute;width:260px;height:260px;right:-70px;top:-120px;border:48px solid rgba(34,211,238,.12);border-radius:50%; }
+        .hero-eyebrow { color:#67e8f9;font-size:.72rem;letter-spacing:.14em;font-weight:800;margin-bottom:.45rem; }
+        .hero-title { font-size:clamp(1.35rem,2.4vw,2rem);font-weight:800;line-height:1.25;margin:0;letter-spacing:-.035em; }
+        .hero-copy { color:#bfdbfe;font-size:.86rem;margin:.55rem 0 0;max-width:720px; }
+        .hero-meta { position:absolute;right:1.6rem;bottom:1.5rem;display:flex;align-items:center;gap:.45rem;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:.45rem .75rem;font-size:.72rem;backdrop-filter:blur(8px); }
+        .live-dot { width:7px;height:7px;border-radius:50%;background:#34d399;box-shadow:0 0 0 5px rgba(52,211,153,.13); }
+        .kpi-grid { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.8rem;margin:0 0 1.25rem; }
+        .kpi-card { background:rgba(255,255,255,.92);border:1px solid rgba(226,232,240,.95);border-radius:16px;padding:1rem 1.05rem;box-shadow:0 6px 22px rgba(15,23,42,.045); }
+        .kpi-label { color:var(--muted);font-size:.7rem;font-weight:700;letter-spacing:.035em;text-transform:uppercase; }
+        .kpi-value { color:var(--ink);font-size:1.35rem;font-weight:800;line-height:1.35;margin-top:.22rem; }
+        .kpi-note { color:#94a3b8;font-size:.67rem;margin-top:.2rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+        .section-heading { display:flex;align-items:center;gap:.85rem;margin:.25rem 0 1rem; }
+        .section-icon { display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:#dbeafe;font-size:1.15rem; }
+        .section-title { margin:0;font-size:1.05rem;font-weight:800;color:var(--ink); }
+        .section-copy { margin:.15rem 0 0;color:var(--muted);font-size:.76rem; }
+        div[data-testid="stPlotlyChart"], div[data-testid="stDataFrame"], div[data-testid="stExpander"] { background:#fff;border:1px solid var(--line);border-radius:16px;padding:.45rem;box-shadow:0 5px 20px rgba(15,23,42,.04);overflow:hidden; }
+        div[data-testid="stMetric"] { background:#fff;border:1px solid var(--line);border-radius:15px;padding:.85rem 1rem;box-shadow:0 4px 16px rgba(15,23,42,.04); }
+        .stButton > button, .stDownloadButton > button { border-radius:11px;border:1px solid #cbd5e1;font-weight:700;min-height:2.55rem; }
+        .stButton > button:hover, .stDownloadButton > button:hover { border-color:var(--blue);color:var(--blue);box-shadow:0 6px 18px rgba(37,99,235,.12); }
+        div[data-testid="stAlert"] { border-radius:14px; }
+        @media (max-width: 800px) {
+            .block-container { padding-top:1rem;padding-left:1rem;padding-right:1rem; }
+            .kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+            .hero-meta { position:static;width:max-content;margin-top:1rem; }
+        }
+        @media (max-width: 480px) { .kpi-grid { grid-template-columns:1fr; } }
     </style>
     """,
     unsafe_allow_html=True
@@ -589,18 +653,16 @@ trading_type_color = "#2e7d32" if is_virtual else "#e53935"
 # 증권사 브랜딩/Open API 링크는 사이드바 하단의 심플 웹링크로 대체되었다.
 # 폰트 스케일 통일: 제목 16px · 본문 14px · 보조 12px
 account_panel_html = f"""
-<div style="margin-bottom:10px;">
-<h4 style="margin:0 0 8px 0;font-size:16px;">💎 Trading Bot Control</h4>
-<div style="background-color:{status_bg};padding:8px;border-radius:5px;color:{status_color};font-size:14px;font-weight:bold;margin-bottom:10px;line-height:1.6;">
-시스템 상태: 🟢 가동 중<br>
-자동매매 상태: {'⚔️ 전투 중' if is_any_trading else '💤 휴식 중'} (한국:{'O' if not is_kor_holiday else 'X'}, 미국:{'O' if not is_us_holiday else 'X'})
+<div style="background:#fff;border:1px solid #e2e8f0;border-radius:18px;padding:1.15rem 1.25rem;margin-bottom:1rem;box-shadow:0 5px 20px rgba(15,23,42,.04);">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;"><b style="font-size:15px;color:#10213a;">Trading Bot Control</b><span style="font-size:11px;background:{status_bg};color:{status_color};padding:5px 9px;border-radius:999px;font-weight:800;">● SYSTEM ONLINE</span></div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1px;background:#e2e8f0;border:1px solid #e2e8f0;border-radius:13px;overflow:hidden;">
+  <div style="background:#f8fafc;padding:12px;"><small style="color:#64748b;">자동매매</small><br><b>{'⚔️ 거래 진행 중' if is_any_trading else '◷ 시장 대기 중'}</b></div>
+  <div style="background:#f8fafc;padding:12px;"><small style="color:#64748b;">KIS 계좌</small><br><b>{kis_account_no}-{kis_account_suffix}</b> · <span style="color:{trading_type_color};">{trading_type_str}</span></div>
+  <div style="background:#f8fafc;padding:12px;"><small style="color:#64748b;">운영 원금</small><br><b>{investment_budget:,}원</b></div>
+  <div style="background:#f8fafc;padding:12px;"><small style="color:#64748b;">현재 총자산</small><br><b>{real_total_assets:,}원</b></div>
+  <div style="background:#f8fafc;padding:12px;"><small style="color:#64748b;">사용 가능 현금</small><br><b>{account_balance_str}</b></div>
+  <div style="background:#f8fafc;padding:12px;"><small style="color:#64748b;">누적 실현손익</small><br><b style="color:{'#ef4444' if system_profit < 0 else '#10b981' if system_profit > 0 else '#10213a'};">{system_profit:+,}원</b></div>
 </div>
-<p style="margin:0 0 6px 0;font-size:14px;"><strong>KIS Account:</strong> <code>{kis_account_no}-{kis_account_suffix}</code></p>
-<p style="margin:0 0 6px 0;font-size:14px;"><strong>투자 운영 종류:</strong> <code style="color:{trading_type_color};font-weight:bold;">{trading_type_str}</code></p>
-<p style="margin:0 0 6px 0;font-size:14px;"><strong>투자 운영 금액 (원금):</strong> <code>{investment_budget:,}원</code></p>
-<p style="margin:0 0 6px 0;font-size:14px;"><strong>투자 운영 결과 (실제 총자산):</strong> <code style="color:{'#e53935' if real_total_assets < investment_budget else '#2e7d32' if real_total_assets > investment_budget else '#333'};font-weight:bold;">{real_total_assets:,}원</code></p>
-<p style="margin:0 0 6px 0;font-size:14px;"><strong>증권 계좌 예수금 (현금):</strong> <code style="font-weight:bold;">{account_balance_str}</code></p>
-<p style="margin:0 0 15px 0;font-size:14px;"><strong>{system_profit_label}:</strong> <code style="color:{'#e53935' if system_profit < 0 else '#2e7d32' if system_profit > 0 else '#333'};font-weight:bold;">{system_profit:+,}원</code></p>
 </div>
 """
 
@@ -618,25 +680,27 @@ if _qp_view is not None:
 if "nav_view" not in st.session_state:
     st.session_state["nav_view"] = MENU_ITEMS[_default_idx]
 
-# 좌측 상단 Home 링크 — 대시보드 홈(루트 주소)으로 이동
+# 좌측 브랜드 및 Home 링크 — 배포 호스트에 관계없이 현재 앱의 루트로 이동한다.
 st.sidebar.markdown(
     """
-    <a href="http://leemgs.mooo.com:8501/" target="_self" style="text-decoration:none;">
-        <div style='background-color:#03256C;color:#ffffff;padding:8px 10px;border-radius:6px;text-align:center;font-weight:bold;font-size:14px;margin-bottom:10px;'>
-            🏠 Home
-        </div>
+    <div class="brand-block">
+      <div class="brand-mark"><span class="brand-icon">↗</span><span>QuantFlow</span></div>
+      <div class="brand-caption">AI TRADING SYSTEM</div>
+    </div>
+    <a href="/" target="_self" style="text-decoration:none;">
+      <div style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);padding:9px 11px;border-radius:11px;font-weight:700;font-size:13px;margin-bottom:14px;">⌂ &nbsp;대시보드 홈</div>
     </a>
     """,
     unsafe_allow_html=True
 )
 
-st.sidebar.markdown("#### 📂 메뉴")
+st.sidebar.markdown("<p style='font-size:11px;font-weight:800;letter-spacing:.12em;color:#64748b;margin:0 0 6px 8px;'>WORKSPACE</p>", unsafe_allow_html=True)
 selected_menu = st.sidebar.radio(
     "메뉴 선택", MENU_ITEMS, key="nav_view", label_visibility="collapsed"
 )
 # 현재 선택을 쿼리 파라미터에 반영 (다음 자동 새로고침 시 복원용)
 _set_query_param("view", str(MENU_ITEMS.index(selected_menu)))
-st.sidebar.markdown("---")
+st.sidebar.markdown("<hr><p style='font-size:11px;font-weight:800;letter-spacing:.12em;color:#64748b;margin:0 0 6px 8px;'>LIVE CONTROL</p>", unsafe_allow_html=True)
 
 # 새로고침 간격 슬라이더 (사이드바에 상시 배치). 값은 쿼리 파라미터(refresh)로
 # 영속화하여 자동 새로고침의 전체 리로드 후에도 유지되도록 한다.
@@ -698,29 +762,37 @@ unfilled_buy = 0
 unfilled_sell = 0
 
 # ── 메인 콘텐츠 ───────────────────────────────────────────────────────────────
-# 헤더(제목)와 요약 KPI를 컴팩트한 한 줄 요약 바로 통합하여 상단 공간을 최소화한다.
+# 선택 메뉴별 인포그래픽 설명. 사용자가 데이터의 의미를 즉시 이해하도록 한다.
+MENU_DESCRIPTIONS = {
+    MENU_ITEMS[0]: ("GLOBAL SIGNAL MAP", "글로벌 시장 국면", "주요 지수와 200일 이동평균선으로 시장의 위험 온도를 한눈에 확인합니다."),
+    MENU_ITEMS[1]: ("GOAL TRACKER", "수익 도전 현황", "운영 자산, 실현 손익, 목표까지의 여정을 실시간으로 추적합니다."),
+    MENU_ITEMS[2]: ("PERFORMANCE", "누적 자산 곡선", "거래가 쌓일수록 변화하는 전략의 누적 성과를 시각화합니다."),
+    MENU_ITEMS[3]: ("TRADE INTELLIGENCE", "최근 거래 기록", "체결 내역과 승률 흐름을 함께 살펴보고 전략의 품질을 진단합니다."),
+    MENU_ITEMS[4]: ("ALLOCATION MAP", "손익 히트맵", "종목별 수익 기여도와 손실 집중 구간을 면적으로 비교합니다."),
+    MENU_ITEMS[5]: ("AI COPILOT", "Gemini 투자 인사이트", "최근 매매 데이터를 AI로 복기해 다음 의사결정에 활용합니다."),
+    MENU_ITEMS[6]: ("SYSTEM OBSERVABILITY", "시스템 활동 로그", "자동매매 엔진의 상태와 이벤트를 실시간으로 모니터링합니다."),
+}
+
+# 헤더와 KPI를 반응형 인포그래픽 카드로 구성한다.
 _profit_color = '#e53935' if display_profit < 0 else '#2e7d32' if display_profit > 0 else '#333'
 _goal_rate = (display_profit / TARGET_GOAL * 100) if TARGET_GOAL else 0.0
 _goal_color = '#e53935' if _goal_rate < 0 else '#2e7d32' if _goal_rate > 0 else '#333'
 
 st.markdown(
     f"""
-<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px 12px;margin-bottom:8px;">
-  <span style="font-size:20px;font-weight:800;">🚀 Real-time Dashboard for Stock Quant Trader</span>
-  <span style="font-size:12px;color:#888;">현재 메뉴: <b style="color:#03256C;">{selected_menu}</b></span>
+<div class="hero-panel">
+  <div class="hero-eyebrow">QUANTITATIVE INVESTMENT COMMAND CENTER</div>
+  <h1 class="hero-title">데이터가 이끄는 더 선명한 투자</h1>
+  <p class="hero-copy">시장 신호부터 거래 성과, AI 인사이트까지 하나의 실시간 워크스페이스에서 확인하세요.</p>
+  <div class="hero-meta"><span class="live-dot"></span> LIVE · {now.strftime('%Y.%m.%d %H:%M')} KST</div>
 </div>
-<div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;
-     padding:8px 14px;background:#f8f9fa;border:1px solid #e6e6e6;border-radius:8px;
-     font-size:13px;color:#444;margin-bottom:14px;">
-  <span>📊 <b>총 거래</b> <b style="font-size:15px;">{total_trades}</b>회
-       <span style="color:#aaa;font-size:11px;">(매수 {buy_count}·매도 {sell_count} / 미체결 매수 {unfilled_buy}·매도 {unfilled_sell})</span></span>
-  <span style="color:#ddd;">|</span>
-  <span>🎯 <b>승률</b> <b style="font-size:15px;">{win_rate:.1f}%</b></span>
-  <span style="color:#ddd;">|</span>
-  <span>💰 <b>누적 손익</b> <b style="font-size:15px;color:{_profit_color};">{display_profit:+,.0f}원</b></span>
-  <span style="color:#ddd;">|</span>
-  <span>🏁 <b>목표 달성률</b> <b style="font-size:15px;color:{_goal_color};">{_goal_rate:.1f}%</b></span>
+<div class="kpi-grid">
+  <div class="kpi-card"><div class="kpi-label">▦ Total Trades</div><div class="kpi-value">{total_trades:,}<small style="font-size:.7rem;color:#64748b"> 건</small></div><div class="kpi-note">매수 {buy_count} · 매도 {sell_count} · 미체결 {unfilled_buy + unfilled_sell}</div></div>
+  <div class="kpi-card"><div class="kpi-label">◎ Win Rate</div><div class="kpi-value">{win_rate:.1f}<small style="font-size:.7rem;color:#64748b">%</small></div><div class="kpi-note">확정 손익 거래 기준</div></div>
+  <div class="kpi-card"><div class="kpi-label">↗ Realized P/L</div><div class="kpi-value" style="color:{_profit_color};">{display_profit:+,.0f}<small style="font-size:.7rem"> 원</small></div><div class="kpi-note">누적 실현 손익</div></div>
+  <div class="kpi-card"><div class="kpi-label">◈ Goal Progress</div><div class="kpi-value" style="color:{_goal_color};">{_goal_rate:.1f}<small style="font-size:.7rem">%</small></div><div class="kpi-note">목표 {TARGET_GOAL:,.0f}원 기준</div></div>
 </div>
+<div class="section-heading"><div class="section-icon">{selected_menu.split()[0]}</div><div><h2 class="section-title">{MENU_DESCRIPTIONS[selected_menu][1]}</h2><p class="section-copy">{MENU_DESCRIPTIONS[selected_menu][2]}</p></div></div>
 """,
     unsafe_allow_html=True
 )
