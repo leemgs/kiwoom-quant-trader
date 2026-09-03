@@ -40,9 +40,9 @@ st.markdown(
         .block-container { max-width: 1480px; padding-top: 1.6rem; padding-bottom: 3rem; }
         header[data-testid="stHeader"] { background: transparent; }
         /* 기본 21rem 사이드바는 데이터 영역을 지나치게 좁힌다. 데스크톱에서는
-           15rem로 고정하고 내부 여백과 메뉴 밀도도 함께 낮춘다. */
+           13rem로 고정하고 내부 여백과 메뉴 밀도도 함께 낮춘다. */
         section[data-testid="stSidebar"] {
-            width: 15rem !important; min-width: 15rem !important; max-width: 15rem !important;
+            width: 13rem !important; min-width: 13rem !important; max-width: 13rem !important;
             background: var(--navy); border-right: 1px solid rgba(255,255,255,.08);
         }
         [data-testid="stSidebarUserContent"] {
@@ -74,7 +74,7 @@ st.markdown(
         .hero-panel { position:relative; overflow:hidden; padding:1.55rem 1.7rem; border-radius:22px; color:#fff; background:linear-gradient(120deg,#081426 0%,#102d55 58%,#075985 100%); box-shadow:0 18px 45px rgba(15,23,42,.15); margin-bottom:1rem; }
         .hero-panel:after { content:"";position:absolute;width:260px;height:260px;right:-70px;top:-120px;border:48px solid rgba(34,211,238,.12);border-radius:50%; }
         .hero-eyebrow { color:#67e8f9;font-size:.72rem;letter-spacing:.14em;font-weight:800;margin-bottom:.45rem; }
-        .hero-title { font-size:clamp(1.35rem,2.4vw,2rem);font-weight:800;line-height:1.25;margin:0;letter-spacing:-.035em; }
+        .hero-title { color:#fff !important;font-size:clamp(1.35rem,2.4vw,2rem);font-weight:800;line-height:1.25;margin:0;letter-spacing:-.035em; }
         .hero-copy { color:#bfdbfe;font-size:.86rem;margin:.55rem 0 0;max-width:720px; }
         .hero-meta { position:absolute;right:1.6rem;bottom:1.5rem;display:flex;align-items:center;gap:.45rem;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:.45rem .75rem;font-size:.72rem;backdrop-filter:blur(8px); }
         .live-dot { width:7px;height:7px;border-radius:50%;background:#34d399;box-shadow:0 0 0 5px rgba(52,211,153,.13); }
@@ -93,7 +93,7 @@ st.markdown(
         .stButton > button:hover, .stDownloadButton > button:hover { border-color:var(--blue);color:var(--blue);box-shadow:0 6px 18px rgba(37,99,235,.12); }
         div[data-testid="stAlert"] { border-radius:14px; }
         @media (max-width: 800px) {
-            section[data-testid="stSidebar"] { width: 16rem !important; min-width: 16rem !important; max-width: 85vw !important; }
+            section[data-testid="stSidebar"] { width: 15rem !important; min-width: 15rem !important; max-width: 85vw !important; }
             .block-container { padding-top:1rem;padding-left:1rem;padding-right:1rem; }
             .kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
             .hero-meta { position:static;width:max-content;margin-top:1rem; }
