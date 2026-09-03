@@ -39,17 +39,25 @@ st.markdown(
         .stApp { background: radial-gradient(circle at 82% 0%, #e0f2fe 0, transparent 27%), var(--canvas); color: var(--ink); }
         .block-container { max-width: 1480px; padding-top: 1.6rem; padding-bottom: 3rem; }
         header[data-testid="stHeader"] { background: transparent; }
-        [data-testid="stSidebarUserContent"] {
-            padding-top: 1.25rem !important;
-            padding-left: 1rem; padding-right: 1rem;
+        /* 기본 21rem 사이드바는 데이터 영역을 지나치게 좁힌다. 데스크톱에서는
+           15rem로 고정하고 내부 여백과 메뉴 밀도도 함께 낮춘다. */
+        section[data-testid="stSidebar"] {
+            width: 15rem !important; min-width: 15rem !important; max-width: 15rem !important;
+            background: var(--navy); border-right: 1px solid rgba(255,255,255,.08);
         }
-        section[data-testid="stSidebar"] { background: var(--navy); border-right: 1px solid rgba(255,255,255,.08); }
+        [data-testid="stSidebarUserContent"] {
+            padding-top: .8rem !important;
+            padding-left: .65rem; padding-right: .65rem;
+        }
         section[data-testid="stSidebar"] * { color: #dbeafe; }
         section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] hr { border-color: rgba(255,255,255,.1); }
-        section[data-testid="stSidebar"] div[role="radiogroup"] { gap: .35rem; }
+        section[data-testid="stSidebar"] div[role="radiogroup"] { gap: .18rem; }
         section[data-testid="stSidebar"] label[data-baseweb="radio"] {
-            padding: .7rem .75rem; border-radius: 12px; transition: .18s ease;
+            padding: .5rem .55rem; border-radius: 10px; transition: .18s ease;
             border: 1px solid transparent;
+        }
+        section[data-testid="stSidebar"] label[data-baseweb="radio"] p {
+            font-size: .76rem; line-height: 1.25;
         }
         section[data-testid="stSidebar"] label[data-baseweb="radio"]:hover {
             background: rgba(59,130,246,.13); border-color: rgba(96,165,250,.22); transform: translateX(2px);
@@ -59,10 +67,10 @@ st.markdown(
             box-shadow: 0 8px 22px rgba(2,132,199,.22);
         }
         section[data-testid="stSidebar"] [data-testid="stSlider"] { padding: .25rem .2rem; }
-        .brand-block { padding: .4rem .35rem 1rem; }
-        .brand-mark { display:flex; align-items:center; gap:.7rem; font-size:1.2rem; font-weight:800; color:#fff; }
-        .brand-icon { width:38px;height:38px;display:grid;place-items:center;border-radius:12px;background:linear-gradient(135deg,#3b82f6,#06b6d4);box-shadow:0 8px 22px rgba(6,182,212,.28); }
-        .brand-caption { color:#7dd3fc !important; font-size:.69rem; font-weight:600; letter-spacing:.13em; margin:.45rem 0 0 3.1rem; }
+        .brand-block { padding: .2rem .25rem .7rem; }
+        .brand-mark { display:flex; align-items:center; gap:.55rem; font-size:1.02rem; font-weight:800; color:#fff; }
+        .brand-icon { width:32px;height:32px;display:grid;place-items:center;border-radius:10px;background:linear-gradient(135deg,#3b82f6,#06b6d4);box-shadow:0 8px 22px rgba(6,182,212,.28); }
+        .brand-caption { color:#7dd3fc !important; font-size:.58rem; font-weight:600; letter-spacing:.1em; margin:.3rem 0 0 2.55rem; }
         .hero-panel { position:relative; overflow:hidden; padding:1.55rem 1.7rem; border-radius:22px; color:#fff; background:linear-gradient(120deg,#081426 0%,#102d55 58%,#075985 100%); box-shadow:0 18px 45px rgba(15,23,42,.15); margin-bottom:1rem; }
         .hero-panel:after { content:"";position:absolute;width:260px;height:260px;right:-70px;top:-120px;border:48px solid rgba(34,211,238,.12);border-radius:50%; }
         .hero-eyebrow { color:#67e8f9;font-size:.72rem;letter-spacing:.14em;font-weight:800;margin-bottom:.45rem; }
@@ -85,6 +93,7 @@ st.markdown(
         .stButton > button:hover, .stDownloadButton > button:hover { border-color:var(--blue);color:var(--blue);box-shadow:0 6px 18px rgba(37,99,235,.12); }
         div[data-testid="stAlert"] { border-radius:14px; }
         @media (max-width: 800px) {
+            section[data-testid="stSidebar"] { width: 16rem !important; min-width: 16rem !important; max-width: 85vw !important; }
             .block-container { padding-top:1rem;padding-left:1rem;padding-right:1rem; }
             .kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
             .hero-meta { position:static;width:max-content;margin-top:1rem; }
