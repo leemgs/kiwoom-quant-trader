@@ -111,11 +111,11 @@ st.markdown(
 MENU_ITEMS = [
     "🌐 시장 국면",
     "🎯 수익 도전 현황",
-    "📈 Cumulative Equity Curve",
-    "📋 Recent Trade History",
-    "🔥 Profit/Loss Heatmap",
-    "🤖 Gemini AI Investment Insights",
-    "🖥️ System Activity Logs",
+    "📈 누적 자산 곡선",
+    "📋 최근 거래 내역",
+    "🔥 종목별 손익",
+    "🤖 AI 투자 인사이트",
+    "🖥️ 시스템 로그",
 ]
 
 # 거래 시간 안내 표 (사이드바 대신 '수익 도전 현황' 섹션의 expander에서 사용)
@@ -871,8 +871,8 @@ elif selected_menu == "🎯 수익 도전 현황":
     with st.expander(expander_title):
         st.markdown(MARKET_HOURS_TABLE_HTML, unsafe_allow_html=True)
 
-elif selected_menu == "📈 Cumulative Equity Curve":
-    st.subheader("📈 Cumulative Equity Curve")
+elif selected_menu == "📈 누적 자산 곡선":
+    st.subheader("📈 누적 자산 곡선")
     if not df.empty:
         df_chart = df[['timestamp', 'profit']].copy()
         df_chart['timestamp'] = pd.to_datetime(df_chart['timestamp'])
@@ -885,10 +885,10 @@ elif selected_menu == "📈 Cumulative Equity Curve":
     else:
         st.warning("아직 거래 내역이 없습니다. 시스템이 거래를 시작하면 차트가 활성화됩니다.")
 
-elif selected_menu == "📋 Recent Trade History":
+elif selected_menu == "📋 최근 거래 내역":
     col_trade_title, col_trade_btn = st.columns([3, 1.2])
     with col_trade_title:
-        st.subheader("📋 Recent Trade History")
+        st.subheader("📋 최근 거래 내역")
     if not df.empty:
         with col_trade_btn:
             csv_data = df.to_csv(index=False).encode('utf-8')
@@ -964,8 +964,8 @@ elif selected_menu == "📋 Recent Trade History":
     else:
         st.warning("아직 거래 내역이 없습니다. 시스템이 거래를 시작하면 상세 내역이 활성화됩니다.")
 
-elif selected_menu == "🔥 Profit/Loss Heatmap":
-    st.subheader("🔥 Profit/Loss Heatmap")
+elif selected_menu == "🔥 종목별 손익":
+    st.subheader("🔥 종목별 손익")
     if not df.empty:
         df_group = df.groupby('code', as_index=False)['profit'].sum()
         df_group['abs_profit'] = df_group['profit'].abs().fillna(0)
@@ -980,8 +980,8 @@ elif selected_menu == "🔥 Profit/Loss Heatmap":
     else:
         st.warning("아직 거래 내역이 없습니다. 시스템이 거래를 시작하면 히트맵이 활성화됩니다.")
 
-elif selected_menu == "🤖 Gemini AI Investment Insights":
-    st.subheader("🤖 Gemini AI Investment Insights")
+elif selected_menu == "🤖 AI 투자 인사이트":
+    st.subheader("🤖 AI 투자 인사이트")
     st.caption("Google Gemini로 최근 매매를 복기합니다. (`.env`의 GEMINI_API_KEY 필요)")
     st.caption("ℹ️ 이 화면에서는 생성 중 결과 유실을 막기 위해 자동 새로고침이 일시 중지됩니다.")
 
@@ -1013,7 +1013,7 @@ elif selected_menu == "🤖 Gemini AI Investment Insights":
         else:
             st.success(review)
 
-elif selected_menu == "🖥️ System Activity Logs":
+elif selected_menu == "🖥️ 시스템 로그":
     col_log_title, col_log_btn = st.columns([4, 1])
     with col_log_title:
         st.subheader("🖥️ System Activity Logs (실시간 시스템 로그)")
@@ -1064,7 +1064,7 @@ gc.collect()
 # components.html로 만든 iframe의 setTimeout은, 해당 컴포넌트가 다음 실행에서
 # 렌더링되지 않으면(=Gemini 화면) iframe이 DOM에서 제거되며 타이머도 함께 취소된다.
 # 따라서 Gemini AI 화면에서는 생성이 아무리 오래 걸려도 리로드되지 않는다.
-if selected_menu != "🤖 Gemini AI Investment Insights":
+if selected_menu != "🤖 AI 투자 인사이트":
     import streamlit.components.v1 as _components
     _components.html(
         f"""
